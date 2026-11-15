@@ -30,6 +30,10 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
@@ -109,6 +113,7 @@ fun BrowserScreen(
     var renameValue by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<RemoteEntry?>(null) }
     var propertiesTarget by remember { mutableStateOf<RemoteEntry?>(null) }
+    var deleteList by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
 
     var askPassword by remember { mutableStateOf(false) }
     var passwordInput by remember { mutableStateOf("") }
@@ -225,21 +230,58 @@ fun BrowserScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
-        floatingActionButton = {
+        bottomBar = {
             if (selection.isNotEmpty()) {
-                FilledTonalButton(
-                    onClick = {
-                        val conn = connection ?: return@FilledTonalButton
-                        val chosen = entries.filter { it.path in selection }
-                        val localDir = File(viewModel.settings.lastLocalDir)
-                        viewModel.queueDownloads(conn, chosen, localDir)
-                        selection = emptySet()
-                        scope.launch { snackbar.showSnackbar("已加入下载队列：${chosen.size} 项") }
-                    }
+                val chosen = entries.filter { it.path in selection }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 3.dp
                 ) {
-                    Icon(Icons.Filled.Download, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("下载")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = {
+                            val conn = connection
+                            if (conn != null) {
+                                viewModel.queueDownloads(conn, chosen, File(viewModel.settings.lastLocalDir))
+                                scope.launch { snackbar.showSnackbar("已加入下载队列：${chosen.size} 项") }
+                            }
+                            selection = emptySet()
+                        }) { Icon(Icons.Filled.Download, "下载") }
+
+                        IconButton(onClick = { selection = entries.map { it.path }.toSet() }) {
+                            Icon(Icons.Filled.SelectAll, "全选")
+                        }
+
+                        Spacer(Modifier.weight(1f))
+
+                        if (chosen.size == 1) {
+                            val single = chosen.first()
+                            if (!single.isDirectory) {
+                                IconButton(onClick = {
+                                    onEditFile(single.path)
+                                    selection = emptySet()
+                                }) { Icon(Icons.Filled.Edit, "编辑") }
+                            }
+                            IconButton(onClick = {
+                                renameTarget = single
+                                renameValue = single.name
+                            }) { Icon(Icons.Filled.DriveFileRenameOutline, "重命名") }
+                            IconButton(onClick = { propertiesTarget = single }) {
+                                Icon(Icons.Filled.Info, "属性")
+                            }
+                        }
+
+                        IconButton(onClick = { deleteList = chosen }) {
+                            Icon(Icons.Filled.Delete, "删除")
+                        }
+                        IconButton(onClick = { selection = emptySet() }) {
+                            Icon(Icons.Filled.Close, "取消选择")
+                        }
+                    }
                 }
             }
         }
@@ -341,25 +383,37 @@ fun BrowserScreen(
         }
     }
 
-    if (selection.isNotEmpty()) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { selection = emptySet() },
-            title = { Text("已选 ${selection.size} 项") },
-            text = { Text("可以加入下载队列，或清除选择。") },
+
+    if (deleteList.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { deleteList = emptyList() },
+            title = { Text("删除确认") },
+            text = {
+                Text(
+                    if (deleteList.size == 1) "确定删除「${deleteList.first().name}」？目录会连同内容一起删除。"
+                    else "确定删除选中的 ${deleteList.size} 项？目录会连同内容一起删除。"
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    val conn = connection
-                    if (conn != null) {
-                        val chosen = entries.filter { it.path in selection }
-                        viewModel.queueDownloads(conn, chosen, File(viewModel.settings.lastLocalDir))
-                        scope.launch { snackbar.showSnackbar("已加入下载队列：${chosen.size} 项") }
-                    }
+                    val filesystem = fs
+                    val targets = deleteList
+                    deleteList = emptyList()
                     selection = emptySet()
-                }) { Text("下载") }
+                    if (filesystem != null) {
+                        scope.launch {
+                            var failed = 0
+                            targets.forEach { entry ->
+                                runCatching { viewModel.deleteRemote(filesystem, entry.path) }
+                                    .onFailure { failed++ }
+                            }
+                            if (failed > 0) snackbar.showSnackbar("$failed 项删除失败")
+                            reload(path)
+                        }
+                    }
+                }) { Text("删除") }
             },
-            dismissButton = {
-                TextButton(onClick = { selection = emptySet() }) { Text("取消") }
-            }
+            dismissButton = { TextButton(onClick = { deleteList = emptyList() }) { Text("取消") } }
         )
     }
 
