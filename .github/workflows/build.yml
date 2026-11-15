@@ -31,17 +31,34 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build debug APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Build release APK (unsigned)
+      - name: Build release APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Collect APKs
+      - name: Collect and verify APKs
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/*.apk out/andfrp-plus-debug.apk
-          cp app/build/outputs/apk/release/*.apk out/andfrp-plus-release-unsigned.apk || true
+          cp app/build/outputs/apk/debug/*.apk out/AndFrpPlus-debug.apk
+          if ls app/build/outputs/apk/release/*.apk >/dev/null 2>&1; then
+            cp app/build/outputs/apk/release/*.apk out/AndFrpPlus-release.apk
+          fi
           ls -la out
+          echo "--- 签名校验 ---"
+          for f in out/*.apk; do
+            echo "== $f"
+            "${ANDROID_HOME}/build-tools/34.0.0/apksigner" verify --print-certs "$f" 2>&1 | head -5 || true
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -56,3 +73,5 @@ jobs:
         with:
           files: out/*.apk
           generate_release_notes: true
+          draft: false
+          prerelease: false

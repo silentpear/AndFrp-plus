@@ -5,6 +5,19 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// 签名信息由 CI Secrets 通过环境变量注入；本地没有这些变量时跳过签名。
+val keystoreBase64: String? = System.getenv("ANDROID_KEYSTORE_BASE64")
+val storePasswordEnv: String? = System.getenv("ANDROID_STORE_PASSWORD")
+val keyAliasEnv: String? = System.getenv("ANDROID_KEY_ALIAS")
+val keyPasswordEnv: String? = System.getenv("ANDROID_KEY_PASSWORD")
+
+val hasSigning: Boolean = !keystoreBase64.isNullOrBlank() &&
+    !storePasswordEnv.isNullOrBlank() &&
+    !keyAliasEnv.isNullOrBlank() &&
+    !keyPasswordEnv.isNullOrBlank()
+
+val keystoreFile = layout.buildDirectory.file("signing/release.jks").get().asFile
+
 android {
     namespace = "io.github.silentpear.andfrpplus"
     compileSdk = 35
@@ -18,6 +31,25 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        if (hasSigning) {
+            create("release") {
+                keystoreFile.parentFile?.mkdirs()
+                keystoreFile.writeBytes(
+                    java.util.Base64.getMimeDecoder().decode(keystoreBase64!!.trim())
+                )
+                storeFile = keystoreFile
+                storePassword = storePasswordEnv
+                this.keyAlias = keyAliasEnv
+                this.keyPassword = keyPasswordEnv
+                storeType = "PKCS12"
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -25,6 +57,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
