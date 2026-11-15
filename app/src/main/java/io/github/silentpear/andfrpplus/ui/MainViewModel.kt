@@ -143,6 +143,12 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
         connectionStore.upsert(connection)
     }
 
+    /** 单独更新密码（浏览页认证失败后补填用），并丢弃可能已缓存的连接。 */
+    fun updatePassword(connectionId: String, password: String) {
+        credentials.putPassword(connectionId, password)
+        disconnect(connectionId)
+    }
+
     suspend fun deleteConnection(id: String) {
         disconnect(id)
         credentials.clear(id)

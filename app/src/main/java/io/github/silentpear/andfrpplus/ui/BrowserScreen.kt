@@ -37,6 +37,9 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -49,7 +52,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -108,6 +110,10 @@ fun BrowserScreen(
     var deleteTarget by remember { mutableStateOf<RemoteEntry?>(null) }
     var propertiesTarget by remember { mutableStateOf<RemoteEntry?>(null) }
 
+    var askPassword by remember { mutableStateOf(false) }
+    var passwordInput by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+
     fun reload(target: String) {
         val conn = connection ?: return
         scope.launch {
@@ -118,8 +124,13 @@ fun BrowserScreen(
                 fs = filesystem
                 serverInfo = runCatching { filesystem.serverInfo() }.getOrDefault("")
                 entries = filesystem.list(target)
-            }.onFailure {
-                error = it.describe()
+            }.onFailure { e ->
+                error = e.describe()
+                // 认证失败：多半是没有保存密码，直接让用户补填
+                val chain = generateSequence(e as Throwable) { it.cause }.joinToString(" ") { it.message.orEmpty() }
+                if (chain.contains("authentication", true) || chain.contains("auth", true) && chain.contains("Exhausted", true)) {
+                    askPassword = true
+                }
             }
             loading = false
         }
@@ -338,6 +349,51 @@ fun BrowserScreen(
             dismissButton = {
                 TextButton(onClick = { selection = emptySet() }) { Text("取消") }
             }
+        )
+    }
+
+    if (askPassword) {
+        AlertDialog(
+            onDismissRequest = { askPassword = false },
+            title = { Text("需要密码") },
+            text = {
+                Column {
+                    Text(
+                        "服务器拒绝了认证，可能是密码没有保存下来。请重新输入。",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = passwordInput,
+                        onValueChange = { passwordInput = it },
+                        label = { Text("密码") },
+                        singleLine = true,
+                        visualTransformation = if (passwordVisible)
+                            androidx.compose.ui.text.input.VisualTransformation.None
+                        else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(
+                                    if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    "显示密码"
+                                )
+                            }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val conn = connection
+                    if (conn != null && passwordInput.isNotEmpty()) {
+                        viewModel.updatePassword(conn.id, passwordInput)
+                        askPassword = false
+                        passwordInput = ""
+                        reload(path)
+                    }
+                }) { Text("重试") }
+            },
+            dismissButton = { TextButton(onClick = { askPassword = false }) { Text("取消") } }
         )
     }
 
