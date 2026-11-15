@@ -92,6 +92,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     implementation("com.hierynomus:sshj:0.38.0")
+    // sshj 的可选依赖，Gradle 不会自动带入；缺它会导致 X25519/Ed25519 协商失败
+    implementation("net.i2p.crypto:eddsa:0.3.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     implementation("org.bouncycastle:bcutil-jdk18on:1.78.1")

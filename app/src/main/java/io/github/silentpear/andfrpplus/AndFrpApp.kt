@@ -57,7 +57,9 @@ class AndFrpApp : Application() {
      */
     private fun installBouncyCastle() {
         runCatching {
-            net.schmizz.sshj.common.SecurityUtils.registerSecurityProvider("BC")
+            net.schmizz.sshj.common.SecurityUtils.registerSecurityProvider(
+                "org.bouncycastle.jce.provider.BouncyCastleProvider"
+            )
         }
     }
 }
