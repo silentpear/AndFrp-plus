@@ -34,6 +34,7 @@ class AndFrpApp : Application() {
     override fun onCreate() {
         super.onCreate()
         if (!initialized.compareAndSet(false, true)) return
+        installBouncyCastle()
         connectionStore = ConnectionStore(this)
         credentials = CredentialStore(this)
         settings = SettingsStore(this)
@@ -47,6 +48,16 @@ class AndFrpApp : Application() {
             connectionStore.load()
             history.load()
             syncStore.load()
+        }
+    }
+
+    /**
+     * sshj 的 X25519 / Ed25519 密钥交换依赖 BouncyCastle。
+     * Android 自带的 BC provider 是裁剪版，缺少 X25519，因此注册完整版。
+     */
+    private fun installBouncyCastle() {
+        runCatching {
+            net.schmizz.sshj.common.SecurityUtils.registerSecurityProvider("BC")
         }
     }
 }

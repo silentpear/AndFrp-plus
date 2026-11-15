@@ -128,6 +128,8 @@ dependencies {
 
     implementation("com.hierynomus:sshj:0.38.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
+    implementation("org.bouncycastle:bcutil-jdk18on:1.78.1")
     implementation("org.slf4j:slf4j-android:1.7.36")
     implementation("commons-net:commons-net:3.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
