@@ -391,7 +391,7 @@ fun ConnectionEditScreen(
                             val result = viewModel.testConnection(buildConnection(), password, passphrase)
                             testResult = result.fold(
                                 onSuccess = { "连接成功：$it" },
-                                onFailure = { "失败：${it.message}" }
+                                onFailure = { "失败：" + it.describe() }
                             )
                             testing = false
                         }
@@ -421,3 +421,9 @@ fun ConnectionEditScreen(
         }
     }
 }
+
+/** 把异常链展开，避免只看到最外层一句看不懂的话。 */
+internal fun Throwable.describe(): String =
+    generateSequence(this) { it.cause }
+        .take(5)
+        .joinToString("\n") { "${it.javaClass.simpleName}: ${it.message ?: "无描述"}" }

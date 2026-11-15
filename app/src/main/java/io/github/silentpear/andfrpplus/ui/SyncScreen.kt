@@ -244,7 +244,7 @@ private fun SyncEditorDialog(
     onSave: (SyncTask) -> Unit
 ) {
     var name by remember { mutableStateOf(existing?.name ?: "") }
-    var connectionId by remember { mutableStateOf(existing?.connectionId ?: connections.first().id) }
+    var connectionId by remember { mutableStateOf(existing?.connectionId ?: connections.firstOrNull()?.id.orEmpty()) }
     var localDir by remember { mutableStateOf(existing?.localDir ?: "/sdcard") }
     var remoteDir by remember { mutableStateOf(existing?.remoteDir ?: "/") }
     var mode by remember { mutableStateOf(existing?.mode ?: SyncMode.MIRROR_LOCAL_TO_REMOTE) }

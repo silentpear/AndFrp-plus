@@ -119,7 +119,7 @@ fun BrowserScreen(
                 serverInfo = runCatching { filesystem.serverInfo() }.getOrDefault("")
                 entries = filesystem.list(target)
             }.onFailure {
-                error = it.message ?: "无法读取目录"
+                error = it.describe()
             }
             loading = false
         }
