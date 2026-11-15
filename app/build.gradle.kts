@@ -1,41 +1,9 @@
-import java.util.Base64
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
-
-// 签名信息由 CI Secrets 通过环境变量注入；本地没有这些变量时跳过签名。
-// Secret 内容可能带换行、空格或误粘的终端提示符，这里先严格清洗再解码。
-fun decodeKeystore(raw: String): ByteArray {
-    val cleaned = raw
-        .replace("\r", "")
-        .replace("\n", "")
-        .replace(" ", "")
-        .replace("\t", "")
-        .trim()
-    require(cleaned.isNotEmpty()) { "ANDROID_KEYSTORE_BASE64 为空" }
-    require(cleaned.all { it.isLetterOrDigit() || it == '+' || it == '/' || it == '=' }) {
-        "ANDROID_KEYSTORE_BASE64 含有非法字符，请确认粘贴的是纯 base64 文本"
-    }
-    val bytes = Base64.getDecoder().decode(cleaned)
-    require(bytes.size > 100) { "解码后的密钥库过小（${bytes.size} 字节），请重新粘贴" }
-    return bytes
-}
-
-val keystoreBase64: String? = System.getenv("ANDROID_KEYSTORE_BASE64")
-val storePasswordEnv: String? = System.getenv("ANDROID_STORE_PASSWORD")
-val keyAliasEnv: String? = System.getenv("ANDROID_KEY_ALIAS")
-val keyPasswordEnv: String? = System.getenv("ANDROID_KEY_PASSWORD")
-
-val hasSigning: Boolean = !keystoreBase64.isNullOrBlank() &&
-    !storePasswordEnv.isNullOrBlank() &&
-    !keyAliasEnv.isNullOrBlank() &&
-    !keyPasswordEnv.isNullOrBlank()
-
-val keystoreFile = layout.buildDirectory.file("signing/release.jks").get().asFile
 
 android {
     namespace = "io.github.silentpear.andfrpplus"
@@ -50,23 +18,6 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
-    signingConfigs {
-        if (hasSigning) {
-            create("release") {
-                keystoreFile.parentFile?.mkdirs()
-                keystoreFile.writeBytes(decodeKeystore(keystoreBase64!!))
-                storeFile = keystoreFile
-                storePassword = storePasswordEnv
-                this.keyAlias = keyAliasEnv
-                this.keyPassword = keyPasswordEnv
-                storeType = "PKCS12"
-                enableV1Signing = true
-                enableV2Signing = true
-                enableV3Signing = true
-            }
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -74,9 +25,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (hasSigning) {
-                signingConfig = signingConfigs.getByName("release")
-            }
         }
     }
 
@@ -152,7 +100,6 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
     implementation("com.google.zxing:core:3.5.3")
-
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
