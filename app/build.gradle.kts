@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -36,7 +38,7 @@ android {
             create("release") {
                 keystoreFile.parentFile?.mkdirs()
                 keystoreFile.writeBytes(
-                    java.util.Base64.getMimeDecoder().decode(keystoreBase64!!.trim())
+                    Base64.getMimeDecoder().decode(keystoreBase64!!.trim())
                 )
                 storeFile = keystoreFile
                 storePassword = storePasswordEnv
