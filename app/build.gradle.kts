@@ -8,6 +8,23 @@ plugins {
 }
 
 // 签名信息由 CI Secrets 通过环境变量注入；本地没有这些变量时跳过签名。
+// Secret 内容可能带换行、空格或误粘的终端提示符，这里先严格清洗再解码。
+fun decodeKeystore(raw: String): ByteArray {
+    val cleaned = raw
+        .replace("\r", "")
+        .replace("\n", "")
+        .replace(" ", "")
+        .replace("\t", "")
+        .trim()
+    require(cleaned.isNotEmpty()) { "ANDROID_KEYSTORE_BASE64 为空" }
+    require(cleaned.all { it.isLetterOrDigit() || it == '+' || it == '/' || it == '=' }) {
+        "ANDROID_KEYSTORE_BASE64 含有非法字符，请确认粘贴的是纯 base64 文本"
+    }
+    val bytes = Base64.getDecoder().decode(cleaned)
+    require(bytes.size > 100) { "解码后的密钥库过小（${bytes.size} 字节），请重新粘贴" }
+    return bytes
+}
+
 val keystoreBase64: String? = System.getenv("ANDROID_KEYSTORE_BASE64")
 val storePasswordEnv: String? = System.getenv("ANDROID_STORE_PASSWORD")
 val keyAliasEnv: String? = System.getenv("ANDROID_KEY_ALIAS")
@@ -37,9 +54,7 @@ android {
         if (hasSigning) {
             create("release") {
                 keystoreFile.parentFile?.mkdirs()
-                keystoreFile.writeBytes(
-                    Base64.getMimeDecoder().decode(keystoreBase64!!.trim())
-                )
+                keystoreFile.writeBytes(decodeKeystore(keystoreBase64!!))
                 storeFile = keystoreFile
                 storePassword = storePasswordEnv
                 this.keyAlias = keyAliasEnv

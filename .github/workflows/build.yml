@@ -30,6 +30,24 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Validate signing keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::未配置 ANDROID_KEYSTORE_BASE64，release APK 将不会被签名"
+            exit 0
+          fi
+          # 清洗换行/空格后严格解码，模拟 build.gradle.kts 的处理
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d ' \r\n\t' > /tmp/ks.b64
+          echo "base64 长度: $(wc -c < /tmp/ks.b64)"
+          base64 -d /tmp/ks.b64 > /tmp/release.jks
+          echo "密钥库大小: $(wc -c < /tmp/release.jks) 字节"
+          file /tmp/release.jks
+          keytool -list -keystore /tmp/release.jks -storepass "$ANDROID_STORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS"
+
       - name: Build debug APK
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
