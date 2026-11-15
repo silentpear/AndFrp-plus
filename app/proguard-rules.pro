@@ -1,0 +1,12 @@
+-keep class net.schmizz.** { *; }
+-keep class org.bouncycastle.** { *; }
+-keep class org.slf4j.** { *; }
+-keep class jcifs.** { *; }
+-keep class org.apache.commons.net.** { *; }
+-dontwarn org.slf4j.**
+-dontwarn org.bouncycastle.**
+-dontwarn javax.naming.**
+-dontwarn org.apache.**
+-dontwarn jcifs.**
+-dontwarn net.schmizz.**
+-dontwarn kotlinx.serialization.**
