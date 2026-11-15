@@ -268,6 +268,17 @@ fun BrowserScreen(
                         color = MaterialTheme.colorScheme.error,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
+                    Spacer(Modifier.height(12.dp))
+                    if (connection != null) {
+                        Text(
+                            text = "主机 ${connection.host}:${connection.port}\n" +
+                                "用户 「${connection.username}」\n" +
+                                "认证 密码 · 密码长度 ${viewModel.credentials.getPassword(connection.id)?.length ?: 0}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                     Spacer(Modifier.height(16.dp))
                     FilledTonalButton(onClick = { reload(path) }) { Text("重试") }
                 }

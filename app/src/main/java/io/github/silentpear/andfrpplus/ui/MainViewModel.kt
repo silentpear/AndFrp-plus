@@ -45,6 +45,8 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
     val transfers = app.transfers
 
     private val _availableFs = mutableMapOf<String, RemoteFileSystem>()
+    // 用户在「需要密码」对话框里输入的密码，优先于存储，避免存储异常导致反复失败
+    private val memoryPasswords = mutableMapOf<String, String>()
     private val _pendingUri = MutableStateFlow<String?>(null)
     val pendingUri: StateFlow<String?> = _pendingUri.asStateFlow()
 
@@ -118,7 +120,12 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
 
     suspend fun connect(connection: Connection): RemoteFileSystem = withContext(Dispatchers.IO) {
         _availableFs[connection.id]?.let { return@withContext it }
-        val fs = RemoteFactory.create(app, connection, credentials)
+        val fs = RemoteFactory.create(
+            app,
+            connection,
+            credentials,
+            passwordOverride = memoryPasswords[connection.id]
+        )
         fs.connect()
         _availableFs[connection.id] = fs
         connectionStore.touch(connection.id)
@@ -145,6 +152,7 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
 
     /** 单独更新密码（浏览页认证失败后补填用），并丢弃可能已缓存的连接。 */
     fun updatePassword(connectionId: String, password: String) {
+        memoryPasswords[connectionId] = password
         credentials.putPassword(connectionId, password)
         disconnect(connectionId)
     }

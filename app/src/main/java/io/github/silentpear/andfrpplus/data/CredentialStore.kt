@@ -8,10 +8,13 @@ import androidx.security.crypto.MasterKey
 /**
  * 凭据存储。
  *
- * 优先使用 EncryptedSharedPreferences（Keystore 加密）。但它在部分机型上会
- * 「写入成功、重启后解密失败」，表现就是密码凭空消失、连接报认证失败。
- * 因此创建时做一次写入-读回探测，探测不通过就直接用普通 SharedPreferences，
- * 保证功能可用（普通 prefs 位于应用私有目录，同样不对外暴露）。
+ * 教训：EncryptedSharedPreferences 在部分机型上会出现「写进去成功、读回来是 null」
+ * （Keystore 解密失败被吞掉），表现为密码凭空消失、连接一直报认证失败。
+ *
+ * 因此这里改成双写双读：
+ *  - 能创建加密存储时，同一份值同时写入加密存储和普通存储；
+ *  - 读取时先读加密存储，拿不到再读普通存储。
+ * 只要其中一个可用就不会丢密码。两者都在应用私有目录内，其他应用无法读取。
  */
 class CredentialStore(context: Context) {
 
@@ -34,54 +37,48 @@ class CredentialStore(context: Context) {
         appContext.getSharedPreferences("ferry_credentials_plain", Context.MODE_PRIVATE)
     }
 
-    /** 加密存储是否真正可用（写入后能读回）。 */
+    /** 加密存储是否可用（能写入并读回）。不可用时只用普通存储。 */
     val encryptedUsable: Boolean = runCatching {
         val p = encryptedPrefs ?: return@runCatching false
-        p.edit().putString(KEY_PROBE, PROBE_VALUE).commit()
-        val ok = p.getString(KEY_PROBE, null) == PROBE_VALUE
-        p.edit().remove(KEY_PROBE).commit()
+        p.edit().putString("__probe__", "ok").commit()
+        val ok = p.getString("__probe__", null) == "ok"
+        p.edit().remove("__probe__").commit()
         ok
     }.getOrDefault(false)
 
-    private val prefs: SharedPreferences
-        get() = if (encryptedUsable && encryptedPrefs != null) encryptedPrefs else plainPrefs
-
-    fun putPassword(connectionId: String, password: String) {
-        runCatching { prefs.edit().putString(pwKey(connectionId), password).commit() }
-        // 加密存储不可用时，同时写一份到普通存储，确保下次一定读得到
-        if (!encryptedUsable) Unit
+    private fun write(key: String, value: String) {
+        if (encryptedUsable) {
+            runCatching { encryptedPrefs?.edit()?.putString(key, value)?.commit() }
+        }
+        // 始终写一份普通存储作为兜底
+        runCatching { plainPrefs.edit().putString(key, value).commit() }
     }
 
-    fun getPassword(connectionId: String): String? = runCatching {
-        val primary = prefs.getString(pwKey(connectionId), null)
-        if (!primary.isNullOrEmpty()) primary
-        else plainPrefs.getString(pwKey(connectionId), null)
-    }.getOrNull()
-
-    fun putPassphrase(connectionId: String, passphrase: String) {
-        runCatching { prefs.edit().putString(ppKey(connectionId), passphrase).commit() }
+    private fun read(key: String): String? {
+        if (encryptedUsable) {
+            val v = runCatching { encryptedPrefs?.getString(key, null) }.getOrNull()
+            if (!v.isNullOrEmpty()) return v
+        }
+        return runCatching { plainPrefs.getString(key, null) }.getOrNull()
     }
 
-    fun getPassphrase(connectionId: String): String? = runCatching {
-        val primary = prefs.getString(ppKey(connectionId), null)
-        if (!primary.isNullOrEmpty()) primary
-        else plainPrefs.getString(ppKey(connectionId), null)
-    }.getOrNull()
+    fun putPassword(connectionId: String, password: String) = write(pwKey(connectionId), password)
+
+    fun getPassword(connectionId: String): String? = read(pwKey(connectionId))
+
+    fun putPassphrase(connectionId: String, passphrase: String) = write(ppKey(connectionId), passphrase)
+
+    fun getPassphrase(connectionId: String): String? = read(ppKey(connectionId))
 
     fun hasPassword(connectionId: String): Boolean = !getPassword(connectionId).isNullOrEmpty()
 
+    fun passwordLength(connectionId: String): Int = getPassword(connectionId)?.length ?: 0
+
     fun clear(connectionId: String) {
-        runCatching {
-            prefs.edit().remove(pwKey(connectionId)).remove(ppKey(connectionId)).commit()
-            plainPrefs.edit().remove(pwKey(connectionId)).remove(ppKey(connectionId)).commit()
-        }
+        runCatching { encryptedPrefs?.edit()?.remove(pwKey(connectionId))?.remove(ppKey(connectionId))?.commit() }
+        runCatching { plainPrefs.edit().remove(pwKey(connectionId)).remove(ppKey(connectionId)).commit() }
     }
 
     private fun pwKey(id: String) = "pw_$id"
     private fun ppKey(id: String) = "pp_$id"
-
-    private companion object {
-        const val KEY_PROBE = "__probe__"
-        const val PROBE_VALUE = "ok"
-    }
 }
