@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import io.github.silentpear.andfrpplus.data.Connection
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -72,6 +73,7 @@ fun HomeScreen(
     var query by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Connection?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val filtered = remember(connections, query) {
         if (query.isBlank()) connections
@@ -165,8 +167,10 @@ fun HomeScreen(
             text = { Text("确定删除「${conn.name}」吗？保存的凭据也会一并清除。") },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.deleteConnection(conn.id)
-                    pendingDelete = null
+                    scope.launch {
+                        viewModel.deleteConnection(conn.id)
+                        pendingDelete = null
+                    }
                 }) { Text("删除") }
             },
             dismissButton = {

@@ -41,17 +41,20 @@ object RemoteFactory {
         }
     }
 
-    fun testConnection(
+    suspend fun testConnection(
         context: Context,
         connection: Connection,
         credentials: CredentialStore
     ): Result<String> {
         val fs = create(context, connection, credentials)
-        return runCatching {
+        return try {
             fs.connect()
             val info = fs.serverInfo()
             fs.close()
-            info
-        }.onFailure { runCatching { fs.close() } }
+            Result.success(info)
+        } catch (e: Exception) {
+            runCatching { fs.close() }
+            Result.failure(e)
+        }
     }
 }

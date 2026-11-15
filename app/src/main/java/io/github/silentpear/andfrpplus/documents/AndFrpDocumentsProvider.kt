@@ -242,7 +242,7 @@ class AndFrpDocumentsProvider : DocumentsProvider() {
         if (!local.exists()) runBlocking { fs.download(path, local) {} }
         return android.content.res.AssetFileDescriptor.open(
             local,
-            android.content.res.AssetFileDescriptor.ACCESS_OPEN
+            android.content.res.AssetFileDescriptor.ACCESS_RANDOM
         )
     }
 

@@ -1,3 +1,8 @@
+@file:OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class
+)
+
 package io.github.silentpear.andfrpplus.ui
 
 import androidx.activity.compose.BackHandler

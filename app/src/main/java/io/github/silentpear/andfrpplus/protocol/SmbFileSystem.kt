@@ -63,7 +63,7 @@ class SmbFileSystem(
     override suspend fun list(path: String): List<RemoteEntry> = withContext(Dispatchers.IO) {
         val dir = smb(path)
         (dir.list() ?: emptyArray()).mapNotNull { f ->
-            val rawName = f.name.trimEnd('/')
+            val rawName = f.path.trimEnd('/').substringAfterLast('/')
             if (rawName.isBlank()) return@mapNotNull null
             runCatching {
                 RemoteEntry(

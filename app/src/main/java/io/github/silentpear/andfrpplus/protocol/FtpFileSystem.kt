@@ -41,7 +41,6 @@ class FtpFileSystem(
         ftpClient.controlEncoding = connection.encoding
         ftpClient.connectTimeout = connection.timeoutSeconds * 1000
         ftpClient.defaultTimeout = connection.timeoutSeconds * 1000
-        ftpClient.dataTimeout = connection.timeoutSeconds * 1000
 
         try {
             val proxy = when (connection.proxyType) {

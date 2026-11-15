@@ -9,10 +9,10 @@ import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.sftp.FileMode
 import net.schmizz.sshj.sftp.OpenMode
 import net.schmizz.sshj.sftp.SFTPClient
-import net.schmizz.sshj.transport.verification.ServerKeyVerifier
+import net.schmizz.sshj.transport.verification.HostKeyVerifier
 import net.schmizz.sshj.userauth.keyprovider.KeyProvider
+import net.schmizz.sshj.userauth.password.PasswordUtils
 import java.io.File
-import java.net.SocketAddress
 import java.security.MessageDigest
 import java.security.PublicKey
 import java.util.Base64
@@ -37,35 +37,40 @@ class SftpFileSystem(
     override suspend fun connect() = withContext(Dispatchers.IO) {
         if (client != null) return@withContext
         val ssh = SSHClient()
-        ssh.loadKnownHosts()
-        ssh.addHostKeyVerifier(object : ServerKeyVerifier {
-            override fun verifyServerKey(
-                sshClient: SSHClient,
-                remoteAddress: SocketAddress,
-                serverKey: PublicKey
-            ): Boolean {
-                val fp = fingerprint(serverKey)
+        runCatching { ssh.loadKnownHosts() }
+        ssh.addHostKeyVerifier(object : HostKeyVerifier {
+            override fun verify(hostname: String, port: Int, key: PublicKey): Boolean {
+                val fp = fingerprint(key)
                 seenFingerprint = fp
                 onHostKey(fp)
                 return connection.hostKeyFingerprint.isNullOrBlank() || connection.hostKeyFingerprint == fp
             }
+
+            override fun findExistingAlgorithms(hostname: String, port: Int): MutableList<String> =
+                mutableListOf()
         })
         ssh.connectTimeout = connection.timeoutSeconds * 1000
-        ssh.timeout = connection.timeoutSeconds * 1000
         try {
             ssh.connect(connection.host, connection.port)
             when (connection.authType) {
-                AuthType.PASSWORD -> ssh.authPassword(connection.username, password.orEmpty())
+                AuthType.PASSWORD ->
+                    ssh.authPassword(connection.username, password.orEmpty())
                 AuthType.PRIVATE_KEY -> {
+                    val kf = keyFile ?: throw RemoteException("未选择私钥文件")
                     val key: KeyProvider = if (passphrase.isNullOrEmpty()) {
-                        ssh.loadKeys(keyFile!!.absolutePath)
+                        ssh.loadKeys(kf.absolutePath)
                     } else {
-                        ssh.loadKeys(keyFile!!.absolutePath, null, passphrase)
+                        ssh.loadKeys(
+                            kf.absolutePath,
+                            null,
+                            PasswordUtils.createOneOff(passphrase.toCharArray())
+                        )
                     }
                     ssh.authPublickey(connection.username, key)
                 }
                 AuthType.ANONYMOUS -> ssh.authPassword("anonymous", "anonymous")
-                AuthType.KEYBOARD_INTERACTIVE -> ssh.authPassword(connection.username, password.orEmpty())
+                AuthType.KEYBOARD_INTERACTIVE ->
+                    ssh.authPassword(connection.username, password.orEmpty())
             }
             if (!ssh.isAuthenticated) {
                 throw RemoteException("认证失败：请检查用户名/密码或私钥")
@@ -84,8 +89,7 @@ class SftpFileSystem(
     }
 
     override suspend fun list(path: String): List<RemoteEntry> = withContext(Dispatchers.IO) {
-        val entries = sftpClient().ls(path)
-        entries.map { info ->
+        sftpClient().ls(path).map { info ->
             val attrs = info.attributes
             RemoteEntry(
                 name = info.name,
@@ -130,8 +134,7 @@ class SftpFileSystem(
                 s.rmdir(path)
             } else {
                 val children = s.ls(path).filter { it.name != "." && it.name != ".." }
-                if (children.isEmpty()) s.rmdir(path)
-                else throw RemoteException("目录非空")
+                if (children.isEmpty()) s.rmdir(path) else throw RemoteException("目录非空")
             }
         } else {
             s.rm(path)
@@ -150,28 +153,20 @@ class SftpFileSystem(
         withContext(Dispatchers.IO) {
             local.parentFile?.mkdirs()
             val s = sftpClient()
-            val resumeFrom = if (local.exists()) local.length() else 0L
             val total = stat(remote)?.size ?: 0L
+            val resumeFrom = if (local.exists()) local.length().coerceAtMost(total) else 0L
             s.open(remote).use { handle ->
-                var toSkip = resumeFrom
-                val skipBuffer = ByteArray(64 * 1024)
-                while (toSkip > 0) {
-                    val chunk = minOf(toSkip, skipBuffer.size.toLong()).toInt()
-                    val read = handle.read(skipBuffer, 0, chunk)
-                    if (read <= 0) break
-                    toSkip -= read
-                }
                 java.io.RandomAccessFile(local, "rw").use { out ->
                     out.seek(resumeFrom)
                     var written = resumeFrom
                     var lastTick = resumeFrom
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
-                        val read = handle.read(buffer, 0, buffer.size)
-                        if (read < 0) break
-                        out.write(buffer, 0, read)
-                        written += read
-                        if (written - lastTick > 256 * 1024 || written == total) {
+                        val n = handle.read(written, buffer, 0, buffer.size)
+                        if (n <= 0) break
+                        out.write(buffer, 0, n)
+                        written += n
+                        if (written - lastTick > 256 * 1024 || written >= total) {
                             onProgress(written)
                             lastTick = written
                         }
@@ -191,28 +186,28 @@ class SftpFileSystem(
                 return@withContext
             }
             val startAt = if (existing in 1 until total) existing else 0L
-            java.io.RandomAccessFile(local, "r").use { input ->
-                input.seek(startAt)
-                val modes = if (startAt > 0L) {
-                    EnumSet.of(OpenMode.WRITE, OpenMode.CREATE, OpenMode.APPEND)
-                } else {
-                    EnumSet.of(OpenMode.WRITE, OpenMode.CREATE, OpenMode.TRUNC)
-                }
-                s.open(remote, modes).use { handle ->
-                    var sent = startAt
+            val modes = if (startAt > 0L) {
+                EnumSet.of(OpenMode.WRITE, OpenMode.CREATE, OpenMode.APPEND)
+            } else {
+                EnumSet.of(OpenMode.WRITE, OpenMode.CREATE, OpenMode.TRUNC)
+            }
+            s.open(remote, modes).use { handle ->
+                java.io.RandomAccessFile(local, "r").use { input ->
+                    input.seek(startAt)
+                    var offset = startAt
                     var lastTick = startAt
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        handle.write(buffer, 0, read)
-                        sent += read
-                        if (sent - lastTick > 256 * 1024 || sent == total) {
-                            onProgress(sent)
-                            lastTick = sent
+                        val n = input.read(buffer)
+                        if (n <= 0) break
+                        handle.write(offset, buffer, 0, n)
+                        offset += n
+                        if (offset - lastTick > 256 * 1024 || offset >= total) {
+                            onProgress(offset)
+                            lastTick = offset
                         }
                     }
-                    onProgress(sent)
+                    onProgress(total)
                 }
             }
         }
@@ -228,30 +223,34 @@ class SftpFileSystem(
     override suspend fun quota(): Pair<Long, Long>? = null
 
     override suspend fun readText(path: String, maxBytes: Int): String = withContext(Dispatchers.IO) {
+        val out = java.io.ByteArrayOutputStream()
         sftpClient().open(path).use { handle ->
-            val size = minOf(handle.length(), maxBytes.toLong()).toInt()
-            val buffer = ByteArray(size)
-            var offset = 0
-            while (offset < size) {
-                val read = handle.read(buffer, offset, size - offset)
-                if (read < 0) break
-                offset += read
+            val buffer = ByteArray(64 * 1024)
+            var offset = 0L
+            while (out.size() < maxBytes) {
+                val n = handle.read(offset, buffer, 0, buffer.size)
+                if (n <= 0) break
+                out.write(buffer, 0, n)
+                offset += n
             }
-            String(buffer, 0, offset, Charsets.UTF_8)
         }
+        String(out.toByteArray(), Charsets.UTF_8)
     }
 
     override suspend fun writeText(path: String, content: String) = withContext(Dispatchers.IO) {
         val bytes = content.toByteArray(Charsets.UTF_8)
-        sftpClient().open(path, EnumSet.of(OpenMode.WRITE, OpenMode.CREATE, OpenMode.TRUNC)).use { handle ->
-            handle.write(bytes, 0, bytes.size)
+        sftpClient().open(
+            path,
+            EnumSet.of(OpenMode.WRITE, OpenMode.CREATE, OpenMode.TRUNC)
+        ).use { handle ->
+            handle.write(0, bytes, 0, bytes.size)
         }
     }
 
     override suspend fun serverInfo(): String = withContext(Dispatchers.IO) {
-        val remoteVersion = runCatching { ssh().remoteVersion }.getOrDefault("")
+        val version = runCatching { ssh().remoteVersion }.getOrNull().orEmpty().trim()
         val fp = seenFingerprint ?: ""
-        "SSH ${remoteVersion.trim()}  ·  $fp"
+        if (fp.isBlank()) "SSH $version" else "SSH $version  ·  $fp"
     }
 
     override suspend fun supportsPermissions(): Boolean = true
