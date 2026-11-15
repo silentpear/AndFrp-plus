@@ -1,7 +1,11 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package io.github.silentpear.andfrpplus.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -48,7 +52,7 @@ import io.github.silentpear.andfrpplus.data.SyncPlanEntry
 import io.github.silentpear.andfrpplus.data.SyncTask
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SyncScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val tasks by viewModel.syncStore.tasks.collectAsStateWithLifecycle()
@@ -150,7 +154,10 @@ fun SyncScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                             }
                         }
                         Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             AssistChip(onClick = {}, label = { Text(if (task.deleteExtra) "含删除" else "只增不删") })
                             if (task.wifiOnly) AssistChip(onClick = {}, label = { Text("仅 Wi-Fi") })
                         }
@@ -257,7 +264,10 @@ private fun SyncEditorDialog(
                 )
                 Text("连接：${connections.firstOrNull { it.id == connectionId }?.name ?: "未知"}",
                     style = MaterialTheme.typography.labelSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     connections.forEach { conn ->
                         AssistChip(
                             onClick = { connectionId = conn.id },
@@ -277,7 +287,10 @@ private fun SyncEditorDialog(
                     label = { Text("远端目录") },
                     singleLine = true
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     SyncMode.entries.forEach { m ->
                         AssistChip(
                             onClick = { mode = m },

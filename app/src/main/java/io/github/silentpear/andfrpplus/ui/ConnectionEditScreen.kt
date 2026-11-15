@@ -2,6 +2,8 @@ package io.github.silentpear.andfrpplus.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,7 +52,7 @@ import io.github.silentpear.andfrpplus.data.Protocol
 import io.github.silentpear.andfrpplus.data.ProxyType
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ConnectionEditScreen(
     viewModel: MainViewModel,
@@ -187,20 +189,28 @@ fun ConnectionEditScreen(
             }
 
             Text("协议", style = MaterialTheme.typography.titleSmall)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                maxItemsInEachRow = 4
+            ) {
                 Protocol.entries.forEach { p ->
                     FilterChip(
                         selected = protocol == p,
                         onClick = {
                             protocol = p
-                            if (port == (existing?.port?.toString() ?: Protocol.SFTP.defaultPort.toString())) {
-                                port = p.defaultPort.toString()
-                            }
+                            val stillDefault = port == existing?.port?.toString() ||
+                                port == Protocol.SFTP.defaultPort.toString()
+                            if (stillDefault) port = p.defaultPort.toString()
                         },
-                        label = { Text(p.label.substringBefore(' ')) }
+                        label = {
+                            Text(p.shortLabel, maxLines = 1, softWrap = false)
+                        }
                     )
                 }
             }
+
 
             OutlinedTextField(
                 value = host,

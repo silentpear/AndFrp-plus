@@ -4,14 +4,18 @@ import kotlinx.serialization.Serializable
 import java.util.UUID
 
 @Serializable
-enum class Protocol(val label: String, val defaultPort: Int) {
+enum class Protocol(
+    val label: String,
+    val defaultPort: Int,
+    val shortLabel: String = label
+) {
     FTP("FTP", 21),
-    FTPS("FTPS (显式 TLS)", 21),
-    FTPS_IMPLICIT("FTPS (隐式 TLS)", 990),
-    SFTP("SFTP (SSH)", 22),
+    FTPS("FTPS (显式 TLS)", 21, "FTPS"),
+    FTPS_IMPLICIT("FTPS (隐式 TLS)", 990, "FTPS-S"),
+    SFTP("SFTP (SSH)", 22, "SFTP"),
     SCP("SCP", 22),
-    WEBDAV("WebDAV", 443),
-    SMB("SMB / CIFS", 445)
+    WEBDAV("WebDAV", 443, "WebDAV"),
+    SMB("SMB / CIFS", 445, "SMB")
 }
 
 @Serializable
