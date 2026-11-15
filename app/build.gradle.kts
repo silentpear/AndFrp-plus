@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.ferryapp.ferry"
+    namespace = "io.github.silentpear.andfrpplus"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.ferryapp.ferry"
+        applicationId = "io.github.silentpear.andfrpplus"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

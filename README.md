@@ -53,11 +53,11 @@ The full NDK-based build requires ~5 GB of free space; `/data` on a phone usuall
 ## Architecture
 
 ```
-app/src/main/java/io/github/ferryapp/ferry/
+app/src/main/java/io/github/silentpear/andfrpplus/
 ├── data/         models, connection/credential/history/sync stores (JSON on disk)
 ├── protocol/     RemoteFileSystem + SFTP, FTP(S), WebDAV, SMB implementations
 ├── transfer/     TransferManager (queue, resume, retry, conflict policy), SyncPlanner
-├── documents/    FerryDocumentsProvider — the system file-picker integration
+├── documents/    AndFrpDocumentsProvider — the system file-picker integration
 └── ui/           Compose + Material 3 screens, state-driven navigation
 ```
 
