@@ -187,9 +187,9 @@ class SftpFileSystem(
             }
             val startAt = if (existing in 1 until total) existing else 0L
             val modes = if (startAt > 0L) {
-                EnumSet.of(OpenMode.WRITE, OpenMode.CREATE, OpenMode.APPEND)
+                EnumSet.of(OpenMode.WRITE, OpenMode.CREAT, OpenMode.APPEND)
             } else {
-                EnumSet.of(OpenMode.WRITE, OpenMode.CREATE, OpenMode.TRUNC)
+                EnumSet.of(OpenMode.WRITE, OpenMode.CREAT, OpenMode.TRUNC)
             }
             s.open(remote, modes).use { handle ->
                 java.io.RandomAccessFile(local, "r").use { input ->
@@ -241,14 +241,14 @@ class SftpFileSystem(
         val bytes = content.toByteArray(Charsets.UTF_8)
         sftpClient().open(
             path,
-            EnumSet.of(OpenMode.WRITE, OpenMode.CREATE, OpenMode.TRUNC)
+            EnumSet.of(OpenMode.WRITE, OpenMode.CREAT, OpenMode.TRUNC)
         ).use { handle ->
             handle.write(0, bytes, 0, bytes.size)
         }
     }
 
     override suspend fun serverInfo(): String = withContext(Dispatchers.IO) {
-        val version = runCatching { ssh().remoteVersion }.getOrNull().orEmpty().trim()
+        val version = runCatching { ssh().transport.serverVersion }.getOrNull().orEmpty().trim()
         val fp = seenFingerprint ?: ""
         if (fp.isBlank()) "SSH $version" else "SSH $version  ·  $fp"
     }
@@ -263,27 +263,4 @@ class SftpFileSystem(
     }
 }
 
-internal fun FileMode.toMask(): Int {
-    var mask = when (type) {
-        FileMode.Type.DIRECTORY -> 0x4000
-        FileMode.Type.REGULAR -> 0x8000
-        FileMode.Type.SYMLINK -> 0xA000
-        else -> 0
-    }
-    val perms = permissions ?: return mask
-    val mapping = listOf(
-        FileMode.Permission.USR_R to 0x100,
-        FileMode.Permission.USR_W to 0x80,
-        FileMode.Permission.USR_X to 0x40,
-        FileMode.Permission.GRP_R to 0x20,
-        FileMode.Permission.GRP_W to 0x10,
-        FileMode.Permission.GRP_X to 0x08,
-        FileMode.Permission.OTH_R to 0x04,
-        FileMode.Permission.OTH_W to 0x02,
-        FileMode.Permission.OTH_X to 0x01
-    )
-    for ((permission, bit) in mapping) {
-        if (perms.contains(permission)) mask = mask or bit
-    }
-    return mask
-}
+internal fun FileMode.toMask(): Int = mask

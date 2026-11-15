@@ -240,10 +240,8 @@ class AndFrpDocumentsProvider : DocumentsProvider() {
         val cacheDir = File(app.cacheDir, "thumbs").apply { mkdirs() }
         val local = File(cacheDir, path.hashCode().toUInt().toString() + ".bin")
         if (!local.exists()) runBlocking { fs.download(path, local) {} }
-        return android.content.res.AssetFileDescriptor.open(
-            local,
-            android.content.res.AssetFileDescriptor.ACCESS_RANDOM
-        )
+        val pfd = ParcelFileDescriptor.open(local, ParcelFileDescriptor.MODE_READ_ONLY)
+        return android.content.res.AssetFileDescriptor(pfd, 0L, local.length())
     }
 
     private fun defaultDocProjection(): Array<String> = arrayOf(
