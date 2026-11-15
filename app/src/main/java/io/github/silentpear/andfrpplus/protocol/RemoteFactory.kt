@@ -9,14 +9,28 @@ import java.io.File
 
 object RemoteFactory {
 
+    /**
+     * @param passwordOverride 表单里刚输入、尚未保存的密码；为空时才回退到已保存的凭据。
+     * @param passphraseOverride 私钥口令，同上。
+     */
     fun create(
         context: Context,
         connection: Connection,
         credentials: CredentialStore,
-        onHostKey: (String) -> Unit = {}
+        onHostKey: (String) -> Unit = {},
+        passwordOverride: String? = null,
+        passphraseOverride: String? = null
     ): RemoteFileSystem {
-        val password = credentials.getPassword(connection.id)
-        val passphrase = credentials.getPassphrase(connection.id)
+        val stored = credentials.getPassword(connection.id)
+        val password = when {
+            !passwordOverride.isNullOrEmpty() -> passwordOverride
+            !stored.isNullOrEmpty() -> stored
+            else -> null
+        }
+        val passphrase = when {
+            !passphraseOverride.isNullOrEmpty() -> passphraseOverride
+            else -> credentials.getPassphrase(connection.id)
+        }
         val keyFile = connection.privateKeyPath?.let { File(it) }
         return when (connection.protocol) {
             Protocol.SFTP, Protocol.SCP -> SftpFileSystem(
@@ -44,9 +58,17 @@ object RemoteFactory {
     suspend fun testConnection(
         context: Context,
         connection: Connection,
-        credentials: CredentialStore
+        credentials: CredentialStore,
+        password: String? = null,
+        passphrase: String? = null
     ): Result<String> {
-        val fs = create(context, connection, credentials)
+        val fs = create(
+            context = context,
+            connection = connection,
+            credentials = credentials,
+            passwordOverride = password,
+            passphraseOverride = passphrase
+        )
         return try {
             fs.connect()
             val info = fs.serverInfo()

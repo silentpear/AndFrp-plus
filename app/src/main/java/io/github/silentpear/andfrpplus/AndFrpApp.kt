@@ -56,17 +56,30 @@ class AndFrpApp : Application() {
      * Android 系统自带一个同名的裁剪版 provider，缺少 X25519，且名字被它占住，
      * 直接 addProvider 完整版不会生效。必须先移除，再插到列表最前面。
      *
-     * 已在真实服务器验证：不替换时报 "no such algorithm: X25519 for provider BC"，
-     * 替换后 KEX / 认证 / SFTP 全部正常。
+     * 两条路都已在真实服务器上验证：
+     *  - 主路径（完整 BC）：KEX / 认证 / SFTP 全通
+     *  - 兜底路径（不注册 BC，用平台默认 JCE）：同样全通
+     * 所以这里先尝试替换，替换后检测 X25519 是否真的可用，不可用就退回默认 JCE。
      */
     private fun installBouncyCastle() {
-        runCatching {
+        val fullBcInstalled = runCatching {
             java.security.Security.removeProvider("BC")
             java.security.Security.insertProviderAt(
                 org.bouncycastle.jce.provider.BouncyCastleProvider(),
                 1
             )
-            net.schmizz.sshj.common.SecurityUtils.setSecurityProvider("BC")
+            java.security.Security.getProvider("BC")
+                ?.getService("KeyAgreement", "X25519") != null
+        }.getOrDefault(false)
+
+        runCatching {
+            if (fullBcInstalled) {
+                net.schmizz.sshj.common.SecurityUtils.setSecurityProvider("BC")
+            } else {
+                // 完整版没生效：让 sshj 不要用 BC，改用平台默认 provider
+                net.schmizz.sshj.common.SecurityUtils.setRegisterBouncyCastle(false)
+                net.schmizz.sshj.common.SecurityUtils.setSecurityProvider(null)
+            }
         }
     }
 }

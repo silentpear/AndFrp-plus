@@ -129,8 +129,12 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
         _availableFs.remove(id)?.let { runCatching { it.close() } }
     }
 
-    suspend fun testConnection(connection: Connection): Result<String> = withContext(Dispatchers.IO) {
-        RemoteFactory.testConnection(app, connection, credentials)
+    suspend fun testConnection(
+        connection: Connection,
+        password: String?,
+        passphrase: String?
+    ): Result<String> = withContext(Dispatchers.IO) {
+        RemoteFactory.testConnection(app, connection, credentials, password, passphrase)
     }
 
     suspend fun saveConnection(connection: Connection, password: String?, passphrase: String?) {

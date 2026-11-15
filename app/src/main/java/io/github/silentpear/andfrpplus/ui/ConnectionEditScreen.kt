@@ -63,6 +63,8 @@ fun ConnectionEditScreen(
         connectionId?.let { viewModel.connectionStore.byId(it) }
     }
     val pendingImport = viewModel.clipboardImport.value
+    // 新建连接时固定一个 id，保证「测试连接」与「保存」用的是同一条记录
+    val draftId = remember(existing) { existing?.id ?: java.util.UUID.randomUUID().toString() }
 
     var name by remember { mutableStateOf(existing?.name ?: "") }
     var protocol by remember { mutableStateOf(existing?.protocol ?: Protocol.SFTP) }
@@ -109,7 +111,7 @@ fun ConnectionEditScreen(
         }
     }
 
-    fun buildConnection(): Connection = (existing ?: Connection(name = "", host = "")).copy(
+    fun buildConnection(): Connection = (existing ?: Connection(id = draftId, name = "", host = "")).copy(
         name = name.trim().ifBlank { host.trim() },
         protocol = protocol,
         host = host.trim(),
@@ -386,7 +388,7 @@ fun ConnectionEditScreen(
                         scope.launch {
                             testing = true
                             testResult = null
-                            val result = viewModel.testConnection(buildConnection())
+                            val result = viewModel.testConnection(buildConnection(), password, passphrase)
                             testResult = result.fold(
                                 onSuccess = { "连接成功：$it" },
                                 onFailure = { "失败：${it.message}" }
