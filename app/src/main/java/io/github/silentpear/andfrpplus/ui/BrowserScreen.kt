@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
@@ -55,6 +56,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -115,6 +117,7 @@ fun BrowserScreen(
     var deleteTarget by remember { mutableStateOf<RemoteEntry?>(null) }
     var propertiesTarget by remember { mutableStateOf<RemoteEntry?>(null) }
     var deleteList by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
+    var chmodTargets by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
     var sortKey by remember { mutableStateOf(SortKey.NAME) }
     var ascending by remember { mutableStateOf(true) }
 
@@ -320,6 +323,9 @@ fun BrowserScreen(
                             IconButton(onClick = { propertiesTarget = single }) {
                                 Icon(Icons.Filled.Info, "属性")
                             }
+                            IconButton(onClick = { chmodTargets = chosen }) {
+                                Icon(Icons.Filled.Lock, "权限")
+                            }
                         }
 
                         IconButton(onClick = { deleteList = chosen }) {
@@ -439,6 +445,91 @@ fun BrowserScreen(
         }
     }
 
+
+    if (chmodTargets.isNotEmpty()) {
+        val sample = chmodTargets.first()
+        val baseType = if (sample.isDirectory) 0x4000 else 0x8000
+        val initial = (sample.permissions ?: if (sample.isDirectory) 0x41ED else 0x81A4) and 0xFFF
+        var bits by remember(chmodTargets) { mutableStateOf(initial) }
+
+        AlertDialog(
+            onDismissRequest = { chmodTargets = emptyList() },
+            title = {
+                Text(
+                    if (chmodTargets.size == 1) "权限 · ${chmodTargets.first().name}"
+                    else "权限 · 应用到 ${chmodTargets.size} 项"
+                )
+            },
+            text = {
+                Column {
+                    Row {
+                        Text("", modifier = Modifier.weight(1f))
+                        listOf("所有者", "组", "其他").forEach {
+                            Text(
+                                it,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                    listOf(
+                        Triple("读", listOf(0x100, 0x020, 0x004), listOf(true, true, true)),
+                        Triple("写", listOf(0x080, 0x010, 0x002), listOf(true, true, true)),
+                        Triple("执行", listOf(0x040, 0x008, 0x001), listOf(true, true, true))
+                    ).forEach { (label, masks, _) ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(label, modifier = Modifier.weight(1f))
+                            masks.forEach { mask ->
+                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    Checkbox(
+                                        checked = bits and mask != 0,
+                                        onCheckedChange = {
+                                            bits = if (bits and mask != 0) bits and mask.inv()
+                                            else bits or mask
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "八进制 " + Integer.toOctalString(bits) +
+                            "  ·  " + io.github.silentpear.andfrpplus.protocol.permissionString(baseType or bits),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val filesystem = fs
+                    val targets = chmodTargets
+                    chmodTargets = emptyList()
+                    selection = emptySet()
+                    if (filesystem != null) {
+                        scope.launch {
+                            var failed = 0
+                            targets.forEach { entry ->
+                                val typeBits = if (entry.isDirectory) 0x4000 else 0x8000
+                                runCatching {
+                                    viewModel.chmod(filesystem, entry.path, typeBits or bits)
+                                }.onFailure { failed++ }
+                            }
+                            if (failed > 0) {
+                                snackbar.showSnackbar("$failed 项失败（FTP/WebDAV/SMB 不支持改权限）")
+                            } else {
+                                snackbar.showSnackbar("权限已更新")
+                            }
+                            reload(path)
+                        }
+                    }
+                }) { Text("应用") }
+            },
+            dismissButton = { TextButton(onClick = { chmodTargets = emptyList() }) { Text("取消") } }
+        )
+    }
 
     if (deleteList.isNotEmpty()) {
         AlertDialog(
