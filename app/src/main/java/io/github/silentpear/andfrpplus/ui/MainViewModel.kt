@@ -163,8 +163,28 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
         connectionStore.delete(id)
     }
 
+    /** 返回一个确实可写的下载目录；首选用户设置，不可写时退回应用专属目录。 */
+    fun safeDownloadDir(preferred: File?): File {
+        val candidates = listOfNotNull(
+            preferred,
+            File(settings.lastLocalDir),
+            File(settings.defaultDownloadDir)
+        )
+        for (dir in candidates) {
+            if (runCatching {
+                    dir.mkdirs()
+                    val probe = File(dir, ".ferry_write_test")
+                    probe.writeText("ok")
+                    probe.delete()
+                }.isSuccess
+            ) return dir
+        }
+        return File(settings.defaultDownloadDir).apply { mkdirs() }
+    }
+
     fun queueDownload(connection: Connection, entry: RemoteEntry, localDir: File) {
-        val target = File(localDir, entry.name)
+        val dir = safeDownloadDir(localDir)
+        val target = File(dir, entry.name)
         transfers.enqueue(
             TransferItem(
                 connectionId = connection.id,
@@ -178,12 +198,13 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
     }
 
     fun queueDownloads(connection: Connection, entries: List<RemoteEntry>, localDir: File) {
+        val dir = safeDownloadDir(localDir)
         val items = entries.map { entry ->
             TransferItem(
                 connectionId = connection.id,
                 connectionName = connection.name,
                 direction = TransferDirection.DOWNLOAD,
-                localPath = File(localDir, entry.name).absolutePath,
+                localPath = File(dir, entry.name).absolutePath,
                 remotePath = entry.path,
                 totalBytes = entry.size
             )

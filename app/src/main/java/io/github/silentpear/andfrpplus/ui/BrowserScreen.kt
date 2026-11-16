@@ -217,11 +217,14 @@ fun BrowserScreen(
                 },
                 actions = {
                     if (!searchOpen) {
-                        IconButton(onClick = {
-                            searchOpen = true
-                        }) { Icon(Icons.Filled.Search, "搜索") }
+                        IconButton(onClick = { uploadPicker.launch(arrayOf("*/*")) }) {
+                            Icon(Icons.Filled.Upload, "上传文件")
+                        }
                         IconButton(onClick = { reload(path) }) {
                             Icon(Icons.Filled.Refresh, "刷新")
+                        }
+                        IconButton(onClick = { searchOpen = true }) {
+                            Icon(Icons.Filled.Search, "搜索")
                         }
                         var menu by remember { mutableStateOf(false) }
                         Box {
@@ -290,7 +293,8 @@ fun BrowserScreen(
                             val conn = connection
                             if (conn != null) {
                                 viewModel.queueDownloads(conn, chosen, File(viewModel.settings.lastLocalDir))
-                                scope.launch { snackbar.showSnackbar("已加入下载队列：${chosen.size} 项") }
+                                val dir = viewModel.safeDownloadDir(File(viewModel.settings.lastLocalDir))
+                                scope.launch { snackbar.showSnackbar("已加入队列 ${chosen.size} 项 → ${dir.absolutePath}") }
                             }
                             selection = emptySet()
                         }) { Icon(Icons.Filled.Download, "下载") }

@@ -5,6 +5,14 @@ import android.content.SharedPreferences
 
 class SettingsStore(context: Context) {
 
+    private val appContext: Context = context.applicationContext
+
+    /** 默认下载目录：应用专属外部目录，Android 10+ 无需任何权限即可写入。 */
+    val defaultDownloadDir: String
+        get() = (appContext.getExternalFilesDir(null) ?: appContext.filesDir)
+            .let { java.io.File(it, "AndFrpPlus") }
+            .absolutePath
+
     private val prefs: SharedPreferences =
         context.getSharedPreferences("ferry_settings", Context.MODE_PRIVATE)
 
@@ -47,7 +55,7 @@ class SettingsStore(context: Context) {
         set(value) = prefs.edit().putInt(KEY_SPEED_LIMIT, value.coerceAtLeast(0)).apply()
 
     var lastLocalDir: String
-        get() = prefs.getString(KEY_LAST_LOCAL, null) ?: "/sdcard"
+        get() = prefs.getString(KEY_LAST_LOCAL, null) ?: defaultDownloadDir
         set(value) = prefs.edit().putString(KEY_LAST_LOCAL, value).apply()
 
     private companion object {
