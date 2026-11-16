@@ -60,6 +60,20 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
     val clipboardImport: StateFlow<ClipboardImport?> = _clipboardImport.asStateFlow()
 
     init {
+        io.github.silentpear.andfrpplus.transfer.TransferBridge.manager = transfers
+        viewModelScope.launch {
+            transfers.queue.collect { queue ->
+                val active = queue.any {
+                    it.status == io.github.silentpear.andfrpplus.data.TransferStatus.RUNNING ||
+                        it.status == io.github.silentpear.andfrpplus.data.TransferStatus.QUEUED
+                }
+                if (active) {
+                    io.github.silentpear.andfrpplus.transfer.TransferService.start(app)
+                } else {
+                    io.github.silentpear.andfrpplus.transfer.TransferService.stop(app)
+                }
+            }
+        }
         transfers.onFinished = { item ->
             if (item.status == io.github.silentpear.andfrpplus.data.TransferStatus.COMPLETED) {
                 if (item.direction == TransferDirection.DOWNLOAD) {

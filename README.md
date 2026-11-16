@@ -1,77 +1,116 @@
 # AndFrp+
 
-AndFrp+ — a modern Material 3 file transfer client for Android: FTP, FTPS, SFTP, SCP, WebDAV and SMB, with every feature AndFTP ever had, plus a system-level `DocumentsProvider` that lets **any** app read and write your remote files.
+**Android 上的现代化文件传输客户端**：支持 FTP / FTPS / SFTP / SCP / WebDAV / SMB，
+界面用 Material 3，并且把服务器**接进了系统文件选择器**——任何 App 都能直接读写你的服务器文件。
 
-> Status: early development. The UI shell, protocol layer, transfer engine, sync planner and documents provider are implemented; compile verification is pending the first CI run.
+> 项目地址：https://github.com/silentpear/AndFrp-plus/tree/main
+>
+> 下载：https://github.com/silentpear/AndFrp-plus/releases
 
-## Why another transfer client?
+---
 
-AndFTP is still the reference feature set for Android, but its UI is from another decade and it never integrated with the system. AndFrp+ keeps the feature list and modernises everything else:
+## 为什么做这个
 
-| | AndFTP | AndFrp+ |
+AndFTP 的功能清单到今天依然是安卓端的参考标准，但它的界面停留在十年前，而且从未和系统集成。
+AndFrp+ 保留了那套功能，把其余部分重做：
+
+| 能力 | AndFTP | AndFrp+ |
 |---|---|---|
-| Material You dynamic colour | — | ✅ |
 | FTP / FTPS / SFTP / SCP | ✅ | ✅ |
 | WebDAV / SMB | — | ✅ |
-| Resume, queue, concurrency | partial | ✅ |
-| Internal text editor with save-back | — | ✅ |
-| Folder mirror sync with dry-run preview | — | ✅ |
-| **Registered in the system file picker** | — | ✅ |
+| Material You 动态取色 | — | ✅ |
+| 断点续传 / 重复重试 / 并发可调 | 部分 | ✅ |
+| 图形化权限编辑（3×3 勾选框） | ✅ | ✅ |
+| 图形化选择下载目录 | — | ✅ |
+| 文件夹镜像同步（执行前预演） | — | ✅ |
+| 内置文本编辑器 | — | ✅ |
+| **服务器注册进系统文件选择器** | — | ✅ |
+| 后台传输保活（前台服务 + 唤醒锁） | 部分 | ✅ |
 
-The last row is the point: once a connection exists, it appears in Android's storage picker as a drive. A video player can stream off your NAS, an office app can open and save a remote document, the gallery can import straight to the server. No FTP app on Android does this.
+最后一行是重点：连接添加后，它会出现在系统的存储选择器里。
+视频播放器能直接播 NAS 上的片子，WPS 能直接打开并保存服务器上的文档，相册能直接导入到远端目录。
 
-## Feature set
+---
 
-**Protocols** — FTP, FTPS (explicit), FTPS (implicit), SFTP/SSH2, SCP, WebDAV, SMB2/3.
-**Auth** — password, SSH private key (OpenSSH & PEM, with passphrase), anonymous, keyboard-interactive, host-key fingerprint pinning.
-**Browsing** — single-column drill-down, breadcrumb/up, sort, hidden files, multi-select, rename, recursive delete, chmod, properties panel, recursive search, remote file editing.
-**Transfers** — bidirectional queue, resume, pause/resume/cancel/retry with exponential backoff, tunable concurrency (1–8), conflict policy (overwrite/skip/rename/ask), per-item progress, overall progress ring, transfer history, Wi-Fi-only guard, keep-screen-on.
-**Sync** — one-way mirror either direction or two-way, dry-run plan before execution, optional deletion of extras.
-**Extras** — Material You dynamic colour + custom dark mode, biometric app lock, encrypted credential storage (AES-GCM via Android Keystore), QR-ready connection model, deep links (`sftp://`, `ftp://`, `smb://` …), share-target uploads.
+## 功能
 
-## Building
+**协议** — FTP、FTPS（显式）、FTPS（隐式）、SFTP/SSH2、SCP、WebDAV、SMB2/3
 
-Developed **without a PC** — the project targets building on-device and in CI.
+**认证** — 密码、SSH 私钥（OpenSSH / PEM，支持口令）、匿名、主机密钥指纹
 
-### GitHub Actions (recommended)
+**浏览** — 单栏下钻、多选操作栏、排序（名称 / 大小 / 修改时间，升降序）、
+隐藏文件、搜索、新建文件夹、重命名、递归删除、**图形化 chmod**、属性面板
 
-Push to `main`; the workflow builds a debug and a release APK and uploads both as artifacts. Push a `v*` tag to publish them as a release.
+**传输** — 双向队列、断点续传、失败自动重试（指数退避）、并发 1–8、
+暂停 / 继续 / 取消、冲突策略（覆盖 / 跳过 / 重命名 / 询问）、实时速率、传输历史、
+**前台服务保活 + CPU 唤醒锁**（切到后台不断线）
 
-### Locally (Termux, aarch64)
+**下载目录** — 通过系统「选择文件夹」指定任意位置（Download、SD 卡、U 盘），
+凭 SAF 授权写入，绕开 Android 11+ 对共享存储的写限制
 
-The stock Android SDK ships x86-64 `aapt2`/`zipalign`, so Termux needs the packaged aarch64 builds:
+**上传** — 顶部 ⬆ 按钮调用系统文件选择器，可多选
+
+**同步** — 本地→远端 / 远端→本地 / 双向镜像，**执行前先预演**列出将要变动的文件
+
+**系统集成** — `DocumentsProvider`（服务器变成系统存储）、
+分享目标上传、`sftp://` `ftp://` `smb://` 深链
+
+**安全与体验** — 凭据双写存储（加密不可用时自动回退）、指纹 / 面容解锁、
+Material You 动态取色、深色模式、无广告无遥测
+
+---
+
+## 安装
+
+到 [Releases](https://github.com/silentpear/AndFrp-plus/releases) 下载：
+
+- `AndFrpPlus-debug.apk` —— 已签名，**直接安装**（推荐）
+- `AndFrpPlus-release-unsigned.apk` —— 未签名，需自行签名后才能安装
+
+最低 Android 8.0（API 26），arm64。
+
+---
+
+## 构建
+
+全程在**手机上**开发，构建交给 GitHub Actions。
+
+### GitHub Actions
+
+推送到 `main` 会自动构建；推 `v*` 标签会自动发布 Release。
+
+### 本地（Termux / aarch64）
 
 ```bash
 pkg install aapt2 openjdk-21
-export ANDROID_HOME=$HOME/android-sdk        # platform 35/36 + build-tools
-./gradlew :app:assembleDebug \
-  -Pandroid.aapt2FromMavenOverride=$(command -v aapt2)
+export ANDROID_HOME=$HOME/android-sdk
+./gradlew :app:assembleDebug -Pandroid.aapt2FromMavenOverride=$(command -v aapt2)
 ```
 
-The full NDK-based build requires ~5 GB of free space; `/data` on a phone usually does not have it. CI does.
+---
 
-## Architecture
+## 架构
 
 ```
 app/src/main/java/io/github/silentpear/andfrpplus/
-├── data/         models, connection/credential/history/sync stores (JSON on disk)
-├── protocol/     RemoteFileSystem + SFTP, FTP(S), WebDAV, SMB implementations
-├── transfer/     TransferManager (queue, resume, retry, conflict policy), SyncPlanner
-├── documents/    AndFrpDocumentsProvider — the system file-picker integration
-└── ui/           Compose + Material 3 screens, state-driven navigation
+├── data/         数据模型、连接 / 凭据 / 历史 / 同步存储
+├── protocol/     RemoteFileSystem 接口 + SFTP / FTP(S) / WebDAV / SMB 实现
+├── transfer/     TransferManager（队列、续传、重试、冲突）、SyncPlanner、前台服务
+├── documents/    AndFrpDocumentsProvider —— 系统文件选择器集成
+└── ui/           Compose + Material 3，状态驱动导航
 ```
 
-Everything is coroutine-based; protocol clients are pooled per connection and closed on demand.
+底层协议全部使用成熟开源库：`sshj`、`commons-net`、`jcifs-ng`、`okhttp`。
 
-## Roadmap
+---
 
-- [ ] First green CI build
-- [ ] S3 / MinIO backend
-- [ ] Scheduled sync via WorkManager
-- [ ] QR code connection sharing
-- [ ] Home-screen widget: one-tap folder transfer
-- [ ] Tablet / foldable two-pane layout
+## 已知限制
 
-## Licence
+- 改权限仅 SFTP 支持；FTP / WebDAV / SMB 协议本身无此能力
+- 定时同步尚未接入 WorkManager
+
+---
+
+## 许可
 
 MIT

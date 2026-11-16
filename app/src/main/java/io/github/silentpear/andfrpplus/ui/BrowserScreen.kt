@@ -122,6 +122,15 @@ fun BrowserScreen(
     var ascending by remember { mutableStateOf(true) }
 
     val localContext = androidx.compose.ui.platform.LocalContext.current
+    val downloadTreePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.setDownloadTree(uri)
+            scope.launch { snackbar.showSnackbar("下载目录：" + viewModel.downloadTargetLabel()) }
+        }
+    }
+
     val uploadPicker = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
@@ -235,6 +244,13 @@ fun BrowserScreen(
                                 Icon(Icons.Filled.MoreVert, "更多")
                             }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("下载目录…") },
+                                    onClick = {
+                                        menu = false
+                                        downloadTreePicker.launch(null)
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = { Text("上传文件到当前目录") },
                                     onClick = { menu = false; uploadPicker.launch(arrayOf("*/*")) }

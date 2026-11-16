@@ -197,10 +197,23 @@ fun SettingsScreen(
             )
 
             SectionLabel("关于")
+            val ctx = androidx.compose.ui.platform.LocalContext.current
             ListItem(
                 headlineContent = { Text("AndFrp+") },
-                supportingContent = { Text("版本 ${BuildConfigVersion()} · 开源 · 无遥测") },
-                leadingContent = { Icon(Icons.Filled.Info, null) }
+                supportingContent = {
+                    Text("版本 ${BuildConfigVersion()} · 开源 · 无遥测\n点击打开项目主页")
+                },
+                leadingContent = { Icon(Icons.Filled.Info, null) },
+                modifier = Modifier.clickable {
+                    runCatching {
+                        ctx.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(PROJECT_URL)
+                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                }
             )
             Spacer(Modifier.height(24.dp))
         }
@@ -218,3 +231,5 @@ private fun SectionLabel(text: String) {
 }
 
 private fun BuildConfigVersion(): String = io.github.silentpear.andfrpplus.BuildConfig.VERSION_NAME
+
+private const val PROJECT_URL = "https://github.com/silentpear/AndFrp-plus/tree/main"
