@@ -54,6 +54,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt(KEY_SPEED_LIMIT, 0)
         set(value) = prefs.edit().putInt(KEY_SPEED_LIMIT, value.coerceAtLeast(0)).apply()
 
+    /** 用户通过系统「选择文件夹」挑的下载目录（SAF tree uri）。 */
+    var downloadTreeUri: String?
+        get() = prefs.getString(KEY_DOWNLOAD_TREE, null)
+        set(value) = prefs.edit().putString(KEY_DOWNLOAD_TREE, value).apply()
+
     var lastLocalDir: String
         get() = prefs.getString(KEY_LAST_LOCAL, null) ?: defaultDownloadDir
         set(value) = prefs.edit().putString(KEY_LAST_LOCAL, value).apply()
@@ -69,5 +74,6 @@ class SettingsStore(context: Context) {
         const val KEY_CONFLICT = "conflict_policy"
         const val KEY_SPEED_LIMIT = "speed_limit"
         const val KEY_LAST_LOCAL = "last_local_dir"
+        const val KEY_DOWNLOAD_TREE = "download_tree_uri"
     }
 }

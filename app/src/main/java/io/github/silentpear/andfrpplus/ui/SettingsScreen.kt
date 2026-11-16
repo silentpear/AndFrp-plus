@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.FileOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -156,6 +157,32 @@ fun SettingsScreen(
             )
 
             SectionLabel("文件")
+            var dirLabel by remember { mutableStateOf(viewModel.downloadTargetLabel()) }
+            val treePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+            ) { uri ->
+                if (uri != null) {
+                    viewModel.setDownloadTree(uri)
+                    dirLabel = viewModel.downloadTargetLabel()
+                }
+            }
+            ListItem(
+                headlineContent = { Text("下载目录") },
+                supportingContent = { Text(dirLabel) },
+                leadingContent = { Icon(Icons.Filled.FileOpen, null) },
+                modifier = Modifier.clickable { treePicker.launch(null) }
+            )
+            if (!viewModel.settings.downloadTreeUri.isNullOrEmpty()) {
+                ListItem(
+                    headlineContent = { Text("恢复默认下载目录") },
+                    supportingContent = { Text("改回应用专属目录") },
+                    leadingContent = { Icon(Icons.Filled.Refresh, null) },
+                    modifier = Modifier.clickable {
+                        viewModel.setDownloadTree(null)
+                        dirLabel = viewModel.downloadTargetLabel()
+                    }
+                )
+            }
             ListItem(
                 headlineContent = { Text("传输历史") },
                 leadingContent = { Icon(Icons.Filled.FileOpen, null) },

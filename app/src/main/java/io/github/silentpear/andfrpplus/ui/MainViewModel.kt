@@ -62,8 +62,34 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
     init {
         transfers.onFinished = { item ->
             if (item.status == io.github.silentpear.andfrpplus.data.TransferStatus.COMPLETED) {
+                if (item.direction == TransferDirection.DOWNLOAD) {
+                    viewModelScope.launch { exportDownloadToTree(item) }
+                }
                 NotificationHelper.showCompleted(app, item.fileName)
             }
+        }
+    }
+
+    /**
+     * 下载完成后再把文件写进用户选的文件夹。
+     * 走 SAF 而不是直接写路径，所以即使目录是 /Download 也不会遇到 EACCES。
+     */
+    private suspend fun exportDownloadToTree(item: TransferItem) = withContext(Dispatchers.IO) {
+        val tree = settings.downloadTreeUri ?: return@withContext
+        val source = File(item.localPath)
+        if (!source.exists()) return@withContext
+        runCatching {
+            val root = androidx.documentfile.provider.DocumentFile
+                .fromTreeUri(app, android.net.Uri.parse(tree)) ?: return@runCatching
+            val name = source.name
+            val target = root.findFile(name)
+                ?: root.createFile("application/octet-stream", name)
+                ?: return@runCatching
+            app.contentResolver.openOutputStream(target.uri, "wt")?.use { out ->
+                source.inputStream().use { it.copyTo(out) }
+            }
+        }.onSuccess {
+            source.delete()
         }
     }
 
@@ -164,7 +190,37 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
     }
 
     /** 返回一个确实可写的下载目录；首选用户设置，不可写时退回应用专属目录。 */
+    /** 设置/清除用户选择的下载目录，并持久化读写权限。 */
+    fun setDownloadTree(uri: android.net.Uri?) {
+        if (uri == null) {
+            settings.downloadTreeUri = null
+            return
+        }
+        runCatching {
+            app.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+        }
+        settings.downloadTreeUri = uri.toString()
+    }
+
+    /** 当前下载目录的可读名称，用于设置页显示。 */
+    fun downloadTargetLabel(): String {
+        val tree = settings.downloadTreeUri ?: return "应用专属目录：" + settings.defaultDownloadDir
+        val name = runCatching {
+            androidx.documentfile.provider.DocumentFile.fromTreeUri(app, android.net.Uri.parse(tree))?.name
+        }.getOrNull()
+        return "已选文件夹：" + (name ?: tree.substringAfterLast("%3A").substringAfterLast(":"))
+    }
+
+    /** SAF 导出用的暂存目录。 */
+    fun stagingDir(): File =
+        File(app.getExternalFilesDir(null) ?: app.filesDir, "staging").apply { mkdirs() }
+
     fun safeDownloadDir(preferred: File?): File {
+        if (!settings.downloadTreeUri.isNullOrEmpty()) return stagingDir()
         val candidates = listOfNotNull(
             preferred,
             File(settings.lastLocalDir),
