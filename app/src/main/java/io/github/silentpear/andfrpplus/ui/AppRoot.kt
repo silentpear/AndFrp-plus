@@ -80,9 +80,10 @@ fun AppRoot(
     BackHandler(enabled = backStack.isNotEmpty()) { goBack() }
 
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar {
+                NavigationBar(containerColor = androidx.compose.ui.graphics.Color.Transparent) {
                     val items = listOf(
                         Triple(Screen.Home, "连接", Icons.Filled.Cloud),
                         Triple(Screen.Transfers, "传输", Icons.Filled.SwapVert),

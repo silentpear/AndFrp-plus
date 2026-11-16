@@ -68,8 +68,12 @@ fun SettingsScreen(
     var speedLimit by remember { mutableStateOf(settings.speedLimitKbps) }
 
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text("设置", style = MaterialTheme.typography.headlineMedium) }) }
+        topBar = { TopAppBar(
+            title = { Text("设置", style = MaterialTheme.typography.headlineMedium) },
+            colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+        ) }
     ) { padding ->
         Column(
             Modifier
@@ -193,15 +197,16 @@ fun SettingsScreen(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(
-                        0xFF1C1B1F.toInt(), 0xFF2A475E.toInt(), 0xFF3B2F4A.toInt(),
-                        0xFF123B2E.toInt(), 0xFF4A2F2F.toInt(), 0xFF2E3440.toInt()
+                        0xFF232946.toInt(), 0xFF2C3E50.toInt(), 0xFF1B3B2F.toInt(),
+                        0xFF3E2723.toInt(), 0xFF4A148C.toInt(), 0xFF37474F.toInt(),
+                        0xFF0F2027.toInt(), 0xFF1C1B1F.toInt()
                     ).forEach { preset ->
                         Box(
                             Modifier
-                                .size(36.dp)
+                                .size(32.dp)
                                 .clip(androidx.compose.foundation.shape.CircleShape)
                                 .background(Color(preset))
                                 .clickable {

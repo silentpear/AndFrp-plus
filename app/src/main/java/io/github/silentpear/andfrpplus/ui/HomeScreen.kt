@@ -88,9 +88,11 @@ fun HomeScreen(
     val grouped = remember(filtered) { filtered.groupBy { it.group } }
 
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         modifier = modifier,
         topBar = {
             TopAppBar(
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
                 title = {
                     if (searchOpen) {
                         OutlinedTextField(

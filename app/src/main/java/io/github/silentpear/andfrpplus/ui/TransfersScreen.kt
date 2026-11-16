@@ -61,9 +61,11 @@ fun TransfersScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val overall = if (totalBytes > 0) (doneBytes.toDouble() / totalBytes).toFloat() else 0f
 
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         modifier = modifier,
         topBar = {
             TopAppBar(
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
                 title = {
                     Column {
                         Text("传输", style = MaterialTheme.typography.headlineMedium)
@@ -114,7 +116,7 @@ fun TransfersScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         ) {
             item(key = "__summary__") {
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.6f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(Modifier.padding(20.dp)) {

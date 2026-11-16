@@ -30,7 +30,14 @@ fun AppBackground(
     content: @Composable () -> Unit
 ) {
     if (mode == 0) {
-        content()
+        // 保持和改动前一致：用主题背景色铺底
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
+        ) {
+            content()
+        }
         return
     }
 

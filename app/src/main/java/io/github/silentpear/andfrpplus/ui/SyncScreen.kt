@@ -66,9 +66,13 @@ fun SyncScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
 
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         modifier = modifier,
         topBar = {
-            TopAppBar(title = { Text("同步", style = MaterialTheme.typography.headlineMedium) })
+            TopAppBar(
+                title = { Text("同步", style = MaterialTheme.typography.headlineMedium) },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
+            )
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
