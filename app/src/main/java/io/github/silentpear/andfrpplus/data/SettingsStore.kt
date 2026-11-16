@@ -36,6 +36,19 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_DYNAMIC_COLOR, true)
         set(value) = prefs.edit().putBoolean(KEY_DYNAMIC_COLOR, value).apply()
 
+    /** 0=跟随主题, 1=纯色, 2=图片 */
+    var bgMode: Int
+        get() = prefs.getInt(KEY_BG_MODE, 0)
+        set(value) = prefs.edit().putInt(KEY_BG_MODE, value).apply()
+
+    var bgColor: Int
+        get() = prefs.getInt(KEY_BG_COLOR, 0xFF1C1B1F.toInt())
+        set(value) = prefs.edit().putInt(KEY_BG_COLOR, value).apply()
+
+    var bgImageUri: String?
+        get() = prefs.getString(KEY_BG_IMAGE, null)
+        set(value) = prefs.edit().putString(KEY_BG_IMAGE, value).apply()
+
     var darkMode: Int
         get() = prefs.getInt(KEY_DARK_MODE, 0)
         set(value) = prefs.edit().putInt(KEY_DARK_MODE, value).apply()
@@ -70,6 +83,9 @@ class SettingsStore(context: Context) {
         const val KEY_SHOW_HIDDEN = "show_hidden"
         const val KEY_DYNAMIC_COLOR = "dynamic_color"
         const val KEY_DARK_MODE = "dark_mode"
+        const val KEY_BG_MODE = "bg_mode"
+        const val KEY_BG_COLOR = "bg_color"
+        const val KEY_BG_IMAGE = "bg_image_uri"
         const val KEY_APP_LOCK = "app_lock"
         const val KEY_CONFLICT = "conflict_policy"
         const val KEY_SPEED_LIMIT = "speed_limit"

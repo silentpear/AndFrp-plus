@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import io.github.silentpear.andfrpplus.AndFrpApp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.silentpear.andfrpplus.ui.theme.AndFrpTheme
 
 class MainActivity : FragmentActivity() {
@@ -50,7 +51,12 @@ class MainActivity : FragmentActivity() {
                 else -> isSystemInDarkTheme()
             }
             AndFrpTheme(darkTheme = dark, dynamicColor = settings.dynamicColor) {
-                AppRoot(viewModel = viewModel, incomingUri = incomingUri)
+                val bgMode by viewModel.bgMode.collectAsStateWithLifecycle()
+                val bgColor by viewModel.bgColor.collectAsStateWithLifecycle()
+                val bgImage by viewModel.bgImage.collectAsStateWithLifecycle()
+                AppBackground(mode = bgMode, color = bgColor, imageUri = bgImage) {
+                    AppRoot(viewModel = viewModel, incomingUri = incomingUri)
+                }
             }
         }
     }

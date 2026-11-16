@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -127,15 +128,41 @@ fun EditorScreen(
                     Spacer(Modifier.height(16.dp))
                     FilledTonalButton(onClick = onBack) { Text("返回") }
                 }
-                else -> OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    label = { Text("内容") }
-                )
+                else -> {
+                    val lang = remember(path) { detectLanguage(path) }
+                    val scheme = MaterialTheme.colorScheme
+                    val codeColors = remember(scheme) {
+                        CodeColors(
+                            normal = scheme.onSurface,
+                            keyword = Color(0xFF8AB4F8),
+                            string = Color(0xFFA5D6A7),
+                            comment = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            number = Color(0xFFFFCC80),
+                            punctuation = scheme.onSurfaceVariant
+                        )
+                    }
+                    Column(Modifier.fillMaxSize()) {
+                        Text(
+                            text = lang.name.lowercase() + " · 语法高亮",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 2.dp)
+                        )
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = content,
+                            onValueChange = { content = it },
+                            textStyle = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                color = codeColors.normal
+                            ),
+                            visualTransformation = CodeHighlightTransformation(lang, codeColors),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
         }
     }

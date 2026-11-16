@@ -219,6 +219,21 @@ class WebDavFileSystem(
         throw RemoteException("WebDAV 不支持修改权限")
     }
 
+    override suspend fun openRead(path: String): java.io.InputStream = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url(url(path)).get().auth().build()
+        val response = client().newCall(req).execute()
+        if (!response.isSuccessful) {
+            response.close()
+            throw RemoteException("读取失败：HTTP ${response.code}")
+        }
+        object : java.io.FilterInputStream(response.body?.byteStream() ?: java.io.ByteArrayInputStream(ByteArray(0))) {
+            override fun close() {
+                runCatching { super.close() }
+                runCatching { response.close() }
+            }
+        }
+    }
+
     override suspend fun download(remote: String, local: File, onProgress: (Long) -> Unit) =
         withContext(Dispatchers.IO) {
             val req = Request.Builder().url(url(remote)).get().auth().build()

@@ -37,6 +37,30 @@ data class ClipboardImport(
 
 class MainViewModel(private val app: AndFrpApp) : ViewModel() {
 
+    private val _bgMode = MutableStateFlow(app.settings.bgMode)
+    val bgMode: StateFlow<Int> = _bgMode.asStateFlow()
+    private val _bgColor = MutableStateFlow(app.settings.bgColor)
+    val bgColor: StateFlow<Int> = _bgColor.asStateFlow()
+    private val _bgImage = MutableStateFlow(app.settings.bgImageUri)
+    val bgImage: StateFlow<String?> = _bgImage.asStateFlow()
+
+    fun setBackgroundMode(mode: Int) {
+        settings.bgMode = mode
+        _bgMode.value = mode
+    }
+
+    fun setBackgroundColor(color: Int) {
+        settings.bgColor = color
+        _bgColor.value = color
+        setBackgroundMode(1)
+    }
+
+    fun setBackgroundImage(uri: String?) {
+        settings.bgImageUri = uri
+        _bgImage.value = uri
+        if (uri != null) setBackgroundMode(2) else setBackgroundMode(0)
+    }
+
     val connectionStore = app.connectionStore
     val credentials: CredentialStore = app.credentials
     val settings: SettingsStore = app.settings

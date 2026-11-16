@@ -150,6 +150,18 @@ class FtpFileSystem(
         throw RemoteException("FTP 协议不支持修改权限")
     }
 
+    override suspend fun openRead(path: String): java.io.InputStream = withContext(Dispatchers.IO) {
+        val target = absolute(path)
+        val raw = ftp().retrieveFileStream(target)
+            ?: throw RemoteException("读取失败：${ftp().replyString}")
+        object : java.io.FilterInputStream(raw) {
+            override fun close() {
+                runCatching { super.close() }
+                runCatching { ftp().completePendingCommand() }
+            }
+        }
+    }
+
     override suspend fun download(remote: String, local: File, onProgress: (Long) -> Unit) =
         withContext(Dispatchers.IO) {
             val target = absolute(remote)

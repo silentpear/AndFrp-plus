@@ -77,12 +77,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import io.github.silentpear.andfrpplus.data.Connection
 import io.github.silentpear.andfrpplus.data.RemoteEntry
 import io.github.silentpear.andfrpplus.protocol.RemoteFileSystem
 import io.github.silentpear.andfrpplus.protocol.RemotePaths
 import io.github.silentpear.andfrpplus.protocol.permissionString
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -118,10 +120,25 @@ fun BrowserScreen(
     var propertiesTarget by remember { mutableStateOf<RemoteEntry?>(null) }
     var deleteList by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
     var chmodTargets by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
+    var imagePreview by remember { mutableStateOf<RemoteEntry?>(null) }
     var sortKey by remember { mutableStateOf(SortKey.NAME) }
     var ascending by remember { mutableStateOf(true) }
 
     val localContext = androidx.compose.ui.platform.LocalContext.current
+    fun openExternally(entry: RemoteEntry, mime: String) {
+        val conn = connection ?: return
+        runCatching {
+            val uri = mediaUri(localContext, conn.id, entry.path)
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            localContext.startActivity(android.content.Intent.createChooser(intent, "用其他应用打开"))
+        }.onFailure {
+            scope.launch { snackbar.showSnackbar("没有可用的播放器") }
+        }
+    }
+
     val downloadTreePicker = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -153,29 +170,45 @@ fun BrowserScreen(
     var passwordInput by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    fun reload(target: String) {
+    fun reload(target: String, allowRetry: Boolean = true) {
         val conn = connection ?: return
         scope.launch {
             loading = true
             error = null
+            var handled = false
             runCatching {
                 val filesystem = viewModel.connect(conn)
                 fs = filesystem
                 serverInfo = runCatching { filesystem.serverInfo() }.getOrDefault("")
                 entries = filesystem.list(target)
             }.onFailure { e ->
-                error = e.describe()
-                // 认证失败：多半是没有保存密码，直接让用户补填
-                val chain = generateSequence(e as Throwable) { it.cause }.joinToString(" ") { it.message.orEmpty() }
-                if (chain.contains("authentication", true) || chain.contains("auth", true) && chain.contains("Exhausted", true)) {
-                    askPassword = true
+                val chain = generateSequence(e as Throwable) { it.cause }
+                    .joinToString(" ") { it.message.orEmpty() }
+                val looksLikeDeadSocket = listOf("abort", "Socket", "closed", "reset", "timed out")
+                    .any { chain.contains(it, true) }
+                if (allowRetry && looksLikeDeadSocket) {
+                    // 后台被系统挂起导致连接失效：丢掉旧连接，稍等重连一次
+                    viewModel.disconnect(connection.id)
+                    handled = true
+                    delay(600)
+                    reload(target, allowRetry = false)
+                } else {
+                    error = e.describe()
+                    if (chain.contains("authentication", true) && chain.contains("Exhausted", true)) {
+                        askPassword = true
+                    }
                 }
             }
-            loading = false
+            if (!handled) loading = false
         }
     }
 
     LaunchedEffect(connectionId, path) { reload(path) }
+
+    // 回到前台时若连接已断，自动重连
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+        if (error != null) reload(path)
+    }
 
     LaunchedEffect(incomingFiles) {
         if (incomingFiles.isEmpty()) return@LaunchedEffect
@@ -432,8 +465,14 @@ fun BrowserScreen(
                                     } else if (entry.isDirectory) {
                                         path = entry.path
                                     } else {
-                                        scope.launch {
-                                            snackbar.showSnackbar("长按文件可下载或编辑")
+                                        val mime = mimeOf(entry.name)
+                                        when {
+                                            mime.startsWith("image/") -> imagePreview = entry
+                                            mime.startsWith("video/") || mime.startsWith("audio/") ->
+                                                openExternally(entry, mime)
+                                            mime.startsWith("text/") || isTextual(entry.name) ->
+                                                onEditFile(entry.path)
+                                            else -> propertiesTarget = entry
                                         }
                                     }
                                 },
@@ -461,6 +500,14 @@ fun BrowserScreen(
         }
     }
 
+
+    imagePreview?.let { entry ->
+        ImagePreviewDialog(
+            connectionId = connectionId,
+            entry = entry,
+            onDismiss = { imagePreview = null }
+        )
+    }
 
     if (chmodTargets.isNotEmpty()) {
         val sample = chmodTargets.first()
@@ -817,3 +864,86 @@ private fun queryDisplayName(context: android.content.Context, uri: android.net.
             } else null
         }
 }.getOrNull()
+
+private val TEXT_EXTENSIONS = setOf(
+    "txt", "log", "md", "markdown", "json", "yml", "yaml", "xml", "html", "htm",
+    "kt", "kts", "java", "js", "ts", "py", "sh", "bash", "properties", "conf",
+    "cfg", "ini", "toml", "env", "css", "gradle", "pro", "rules", "sql"
+)
+
+internal fun mimeOf(name: String): String =
+    android.webkit.MimeTypeMap.getSingleton()
+        .getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
+        ?: if (isTextual(name)) "text/plain" else "application/octet-stream"
+
+internal fun isTextual(name: String): Boolean =
+    name.substringAfterLast('.', "").lowercase() in TEXT_EXTENSIONS
+
+/** 组装指向本项目 DocumentsProvider 的文档 URI，可直接交给播放器/图片加载器。 */
+internal fun mediaUri(context: android.content.Context, connectionId: String, path: String): android.net.Uri =
+    android.provider.DocumentsContract.buildDocumentUri(
+        "${context.packageName}.documents",
+        "$connectionId|$path"
+    )
+
+@Composable
+private fun ImagePreviewDialog(
+    connectionId: String,
+    entry: RemoteEntry,
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var bitmap by remember(entry.path) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var failure by remember(entry.path) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(entry.path) {
+        failure = null
+        bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val uri = mediaUri(context, connectionId, entry.path)
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(uri)?.use {
+                    android.graphics.BitmapFactory.decodeStream(it, null, bounds)
+                }
+                var scale = 1
+                while (bounds.outWidth / scale > 2048 || bounds.outHeight / scale > 2048) scale *= 2
+                val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = scale }
+                context.contentResolver.openInputStream(uri)?.use {
+                    android.graphics.BitmapFactory.decodeStream(it, null, opts)
+                }
+            }.getOrNull()
+        }
+        if (bitmap == null) failure = "无法加载图片"
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        androidx.compose.material3.Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                Spacer(Modifier.height(8.dp))
+                when {
+                    failure != null -> Text(failure ?: "", color = MaterialTheme.colorScheme.error)
+                    bitmap == null -> Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(240.dp),
+                        contentAlignment = Alignment.Center
+                    ) { CircularProgressIndicator() }
+                    else -> androidx.compose.foundation.Image(
+                        bitmap = bitmap!!.asImageBitmap(),
+                        contentDescription = entry.name,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("关闭") }
+                }
+            }
+        }
+    }
+}

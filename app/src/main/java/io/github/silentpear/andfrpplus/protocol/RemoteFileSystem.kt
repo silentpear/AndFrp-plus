@@ -22,6 +22,9 @@ interface RemoteFileSystem : Closeable {
 
     suspend fun chmod(path: String, mode: Int)
 
+    /** 打开远端文件的读取流，供在线预览/播放使用（调用方负责关闭）。 */
+    suspend fun openRead(path: String): java.io.InputStream
+
     suspend fun download(remote: String, local: File, onProgress: (Long) -> Unit)
 
     suspend fun upload(local: File, remote: String, onProgress: (Long) -> Unit)
@@ -80,4 +83,46 @@ fun permissionString(mode: Int?): String {
         sb.append(if (mode and bit != 0) chars[i] else '-')
     }
     return sb.toString()
+}
+
+/** 把 sshj 的定位读取包装成 InputStream，供预览/播放流式读取。 */
+class PositionalInputStream(
+    private val readAt: (Long, ByteArray, Int, Int) -> Int,
+    private val lengthProvider: () -> Long,
+    private val closer: () -> Unit
+) : java.io.InputStream() {
+    private var position = 0L
+    private var single: ByteArray? = null
+    private var total = -1L
+
+    override fun read(): Int {
+        val buffer = single ?: ByteArray(1).also { single = it }
+        val n = read(buffer, 0, 1)
+        return if (n <= 0) -1 else buffer[0].toInt() and 0xFF
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        if (len == 0) return 0
+        if (total > 0 && position >= total) return -1
+        val n = readAt(position, b, off, len)
+        if (n <= 0) return -1
+        position += n
+        return n
+    }
+
+    override fun available(): Int {
+        if (total < 0) total = runCatching { lengthProvider() }.getOrDefault(0L)
+        val left = (total - position).coerceAtLeast(0L)
+        return left.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
+
+    override fun skip(n: Long): Long {
+        val step = n.coerceAtLeast(0L)
+        position += step
+        return step
+    }
+
+    override fun close() {
+        runCatching { closer() }
+    }
 }

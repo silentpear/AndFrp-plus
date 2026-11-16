@@ -52,6 +52,11 @@ class SftpFileSystem(
         ssh.connectTimeout = connection.timeoutSeconds * 1000
         try {
             ssh.connect(connection.host, connection.port)
+            // 后台时链路容易被系统挂起：每 20 秒发一次 keep-alive，空闲两分钟后判死
+            runCatching {
+                ssh.connection.keepAlive.keepAliveInterval = 20
+                ssh.connection.timeoutMs = 120_000
+            }
             when (connection.authType) {
                 AuthType.PASSWORD ->
                     ssh.authPassword(connection.username, password.orEmpty())
@@ -147,6 +152,15 @@ class SftpFileSystem(
 
     override suspend fun chmod(path: String, mode: Int) = withContext(Dispatchers.IO) {
         sftpClient().chmod(path, mode)
+    }
+
+    override suspend fun openRead(path: String): java.io.InputStream = withContext(Dispatchers.IO) {
+        val handle = sftpClient().open(path)
+        PositionalInputStream(
+            readAt = { pos, buf, off, len -> handle.read(pos, buf, off, len) },
+            lengthProvider = { handle.length() },
+            closer = { runCatching { handle.close() } }
+        )
     }
 
     override suspend fun download(remote: String, local: File, onProgress: (Long) -> Unit) =

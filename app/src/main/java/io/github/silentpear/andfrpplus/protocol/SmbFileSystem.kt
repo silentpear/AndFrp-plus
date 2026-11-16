@@ -108,6 +108,10 @@ class SmbFileSystem(
         throw RemoteException("SMB 不支持修改权限")
     }
 
+    override suspend fun openRead(path: String): java.io.InputStream = withContext(Dispatchers.IO) {
+        smb(path).inputStream
+    }
+
     override suspend fun download(remote: String, local: File, onProgress: (Long) -> Unit) =
         withContext(Dispatchers.IO) {
             val f = smb(remote)

@@ -204,13 +204,33 @@ class AndFrpDocumentsProvider : DocumentsProvider() {
         val (connId, path) = parseDocId(documentId)
         val conn = connections().firstOrNull { it.id == connId } ?: throw FileNotFoundException()
         val fs = fsFor(conn)
+
+        val wantsWrite = mode.contains('w') || mode.contains('a')
+        val readOnly = mode == "r"
+
+        // 只读：用管道把远端流直接透出去，视频/图片可以边下边看
+        if (readOnly) {
+            val pipe = ParcelFileDescriptor.createPipe()
+            val readEnd = pipe[0]
+            val writeEnd = pipe[1]
+            Thread({
+                try {
+                    val input = runBlocking { fs.openRead(path) }
+                    android.os.ParcelFileDescriptor.AutoCloseOutputStream(writeEnd).use { out ->
+                        input.use { it.copyTo(out, 64 * 1024) }
+                    }
+                } catch (t: Throwable) {
+                    runCatching { writeEnd.closeWithError(t.message) }
+                }
+            }, "ferry-open-$connId").start()
+            return readEnd
+        }
+
+        // 写入：先落到本地缓存，关闭时回传
         val cacheDir = File(app.cacheDir, "docs/${connId.hashCode()}").apply { mkdirs() }
         val local = File(cacheDir, path.hashCode().toUInt().toString() + "_" + RemotePaths.name(path))
 
-        val wantsWrite = mode.contains('w') || mode.contains('a')
-        val truncate = mode.contains('w')
-
-        if (truncate) {
+        if (mode.contains('w')) {
             local.delete()
         } else if (!local.exists()) {
             runBlocking { fs.download(path, local) {} }
@@ -222,9 +242,7 @@ class AndFrpDocumentsProvider : DocumentsProvider() {
             android.os.Handler(android.os.Looper.getMainLooper())
         ) { _ ->
             if (wantsWrite && local.exists()) {
-                runBlocking {
-                    runCatching { fs.upload(local, path) {} }
-                }
+                runBlocking { runCatching { fs.upload(local, path) {} } }
             }
         }
     }

@@ -1,9 +1,12 @@
 package io.github.silentpear.andfrpplus.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +28,7 @@ import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -39,6 +43,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.github.silentpear.andfrpplus.data.ConflictPolicy
 import kotlinx.coroutines.launch
@@ -114,6 +120,83 @@ fun SettingsScreen(
             )
 
             SectionLabel("外观")
+            var bgMode by remember { mutableStateOf(viewModel.settings.bgMode) }
+            var bgColorValue by remember { mutableStateOf(viewModel.settings.bgColor) }
+            val ctxForBg = androidx.compose.ui.platform.LocalContext.current
+            val bgImagePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                if (uri != null) {
+                    runCatching {
+                        ctxForBg.contentResolver.takePersistableUriPermission(
+                            uri,
+                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    viewModel.setBackgroundImage(uri.toString())
+                    bgMode = 2
+                }
+            }
+            ListItem(
+                headlineContent = { Text("背景") },
+                supportingContent = {
+                    Text(listOf("跟随主题", "纯色", "自定义图片")[bgMode.coerceIn(0, 2)])
+                },
+                leadingContent = { Icon(Icons.Filled.Palette, null) }
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("默认" to 0, "纯色" to 1, "图片" to 2).forEach { (label, m) ->
+                    FilterChip(
+                        selected = bgMode == m,
+                        onClick = {
+                            if (m == 2 && viewModel.settings.bgImageUri.isNullOrEmpty()) {
+                                bgImagePicker.launch(arrayOf("image/*"))
+                            } else {
+                                viewModel.setBackgroundMode(m)
+                                bgMode = m
+                            }
+                        },
+                        label = { Text(label) }
+                    )
+                }
+            }
+            if (bgMode == 1) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    listOf(
+                        0xFF1C1B1F.toInt(), 0xFF2A475E.toInt(), 0xFF3B2F4A.toInt(),
+                        0xFF123B2E.toInt(), 0xFF4A2F2F.toInt(), 0xFF2E3440.toInt()
+                    ).forEach { preset ->
+                        Box(
+                            Modifier
+                                .size(36.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(Color(preset))
+                                .clickable {
+                                    viewModel.setBackgroundColor(preset)
+                                    bgColorValue = preset
+                                }
+                        )
+                    }
+                }
+            }
+            if (bgMode == 2) {
+                ListItem(
+                    headlineContent = { Text("选择图片") },
+                    supportingContent = { Text("从相册挑一张作为背景") },
+                    leadingContent = { Icon(Icons.Filled.Palette, null) },
+                    modifier = Modifier.clickable { bgImagePicker.launch(arrayOf("image/*")) }
+                )
+            }
             ListItem(
                 headlineContent = { Text("动态取色") },
                 supportingContent = { Text("跟随系统壁纸（Material You，Android 12+）") },
