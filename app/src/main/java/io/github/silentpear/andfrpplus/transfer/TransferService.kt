@@ -100,31 +100,44 @@ class TransferService : Service() {
             }
         }
 
-        private fun buildNotification(context: Context, text: CharSequence?): Notification {
+        private fun notifyProgress(context: Context, count: Int, done: Long, total: Long) {
+            val percent = if (total > 0) ((done * 100 / total).coerceIn(0, 100)).toInt() else 0
+            val text = buildString {
+                append("$count 个任务")
+                if (total > 0) {
+                    append(" · ")
+                    append(android.text.format.Formatter.formatFileSize(context, done))
+                    append(" / ")
+                    append(android.text.format.Formatter.formatFileSize(context, total))
+                }
+            }
+            runCatching {
+                val manager = context.getSystemService(NotificationManager::class.java)
+                manager?.notify(
+                    NOTIFICATION_ID,
+                    buildNotification(context, text, count, done, total, percent)
+                )
+            }
+        }
+
+        private fun buildNotification(
+            context: Context,
+            text: CharSequence?,
+            count: Int = 0,
+            done: Long = 0,
+            total: Long = 0,
+            percent: Int = 0
+        ): Notification {
             ensureChannel(context)
             return NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setContentTitle("AndFrp+ 正在传输")
                 .setContentText(text ?: "准备中…")
+                .setProgress(if (total > 0) 100 else 0, percent, total <= 0)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build()
-        }
-
-        private fun notifyProgress(context: Context, count: Int, done: Long, total: Long) {
-            val text = buildString {
-                append("$count 个任务")
-                if (total > 0) {
-                    append("  ")
-                    append((done * 100 / total).coerceIn(0, 100))
-                    append("%")
-                }
-            }
-            runCatching {
-                val manager = context.getSystemService(NotificationManager::class.java)
-                manager?.notify(NOTIFICATION_ID, buildNotification(context, text))
-            }
         }
 
         fun start(context: Context) {

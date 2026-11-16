@@ -120,7 +120,9 @@ fun BrowserScreen(
     var propertiesTarget by remember { mutableStateOf<RemoteEntry?>(null) }
     var deleteList by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
     var chmodTargets by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
-    var imagePreview by remember { mutableStateOf<RemoteEntry?>(null) }
+    var imagePreview by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
+    var imageIndex by remember { mutableStateOf(0) }
+    var videoTarget by remember { mutableStateOf<Pair<RemoteEntry, String>?>(null) }
     var sortKey by remember { mutableStateOf(SortKey.NAME) }
     var ascending by remember { mutableStateOf(true) }
 
@@ -467,8 +469,13 @@ fun BrowserScreen(
                                     } else {
                                         val mime = mimeOf(entry.name)
                                         when {
-                                            mime.startsWith("image/") -> imagePreview = entry
-                                            mime.startsWith("video/") || mime.startsWith("audio/") ->
+                                            mime.startsWith("image/") -> {
+                                                val images = entries.filter { e -> !e.isDirectory && mimeOf(e.name).startsWith("image/") }
+                                                imageIndex = images.indexOfFirst { it.path == entry.path }.coerceAtLeast(0)
+                                                imagePreview = images
+                                            }
+                                            mime.startsWith("video/") -> videoTarget = entry to mime
+                                            mime.startsWith("audio/") ->
                                                 openExternally(entry, mime)
                                             mime.startsWith("text/") || isTextual(entry.name) ->
                                                 onEditFile(entry.path)
@@ -501,13 +508,24 @@ fun BrowserScreen(
     }
 
 
-    imagePreview?.let { entry ->
-        ImagePreviewDialog(
+    videoTarget?.let { (entry, mime) ->
+        VideoPlayerDialog(
             connectionId = connectionId,
             entry = entry,
-            onDismiss = { imagePreview = null }
+            mime = mime,
+            onDismiss = { videoTarget = null }
         )
     }
+
+    if (imagePreview.isNotEmpty()) {
+        ImageGalleryDialog(
+            connectionId = connectionId,
+            entries = imagePreview,
+            startIndex = imageIndex,
+            onDismiss = { imagePreview = emptyList() }
+        )
+    }
+
 
     if (chmodTargets.isNotEmpty()) {
         val sample = chmodTargets.first()
@@ -886,18 +904,77 @@ internal fun mediaUri(context: android.content.Context, connectionId: String, pa
         "$connectionId|$path"
     )
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ImagePreviewDialog(
+private fun ImageGalleryDialog(
     connectionId: String,
-    entry: RemoteEntry,
+    entries: List<RemoteEntry>,
+    startIndex: Int,
     onDismiss: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = startIndex.coerceIn(0, (entries.size - 1).coerceAtLeast(0)),
+        pageCount = { entries.size }
+    )
+
+    val current = entries.getOrNull(pagerState.currentPage) ?: entries.first()
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        androidx.compose.material3.Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text(
+                    "${pagerState.currentPage + 1}/${entries.size} · ${current.name}",
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1
+                )
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.foundation.pager.HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(360.dp)
+                ) { page ->
+                    RemoteImage(
+                        connectionId = connectionId,
+                        entry = entries[page],
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "左右滑动切换",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    TextButton(onClick = onDismiss) { Text("关闭") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RemoteImage(
+    connectionId: String,
+    entry: RemoteEntry,
+    modifier: Modifier = Modifier
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var bitmap by remember(entry.path) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var failure by remember(entry.path) { mutableStateOf<String?>(null) }
+    var failure by remember(entry.path) { mutableStateOf(false) }
 
     LaunchedEffect(entry.path) {
-        failure = null
+        bitmap = null
+        failure = false
         bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
                 val uri = mediaUri(context, connectionId, entry.path)
@@ -913,9 +990,32 @@ private fun ImagePreviewDialog(
                 }
             }.getOrNull()
         }
-        if (bitmap == null) failure = "无法加载图片"
+        if (bitmap == null) failure = true
     }
 
+    Box(modifier, contentAlignment = Alignment.Center) {
+        when {
+            failure -> Text("无法加载图片", color = MaterialTheme.colorScheme.error)
+            bitmap == null -> CircularProgressIndicator()
+            else -> androidx.compose.foundation.Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = entry.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
+        }
+    }
+}
+
+/** 内置视频播放器，用系统 VideoView，不额外引入播放器依赖。 */
+@Composable
+private fun VideoPlayerDialog(
+    connectionId: String,
+    entry: RemoteEntry,
+    mime: String,
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         androidx.compose.material3.Surface(
             color = MaterialTheme.colorScheme.surface,
@@ -924,21 +1024,19 @@ private fun ImagePreviewDialog(
             Column(Modifier.padding(12.dp)) {
                 Text(entry.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
                 Spacer(Modifier.height(8.dp))
-                when {
-                    failure != null -> Text(failure ?: "", color = MaterialTheme.colorScheme.error)
-                    bitmap == null -> Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(240.dp),
-                        contentAlignment = Alignment.Center
-                    ) { CircularProgressIndicator() }
-                    else -> androidx.compose.foundation.Image(
-                        bitmap = bitmap!!.asImageBitmap(),
-                        contentDescription = entry.name,
-                        modifier = Modifier.fillMaxWidth(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                    )
-                }
+                androidx.compose.ui.viewinterop.AndroidView(
+                    factory = { ctx ->
+                        android.widget.VideoView(ctx).apply {
+                            val uri = mediaUri(context, connectionId, entry.path)
+                            setVideoURI(uri)
+                            setMediaController(android.widget.MediaController(ctx).also { it.setAnchorView(this) })
+                            setOnPreparedListener { it.isLooping = false; start() }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
+                )
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("关闭") }

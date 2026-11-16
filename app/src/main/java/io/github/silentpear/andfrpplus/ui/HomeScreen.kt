@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -72,6 +75,7 @@ fun HomeScreen(
     val connections by viewModel.connectionStore.connections.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
+    var collapsedGroups by remember { mutableStateOf<Set<String>>(emptySet()) }
     var pendingDelete by remember { mutableStateOf<Connection?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -139,21 +143,64 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 grouped.forEach { (group, list) ->
+                    val collapsed = group in collapsedGroups
                     item(key = "header_$group") {
-                        Text(
-                            text = group,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 4.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    collapsedGroups = if (collapsed) collapsedGroups - group
+                                    else collapsedGroups + group
+                                }
+                                .padding(start = 4.dp, top = 12.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (collapsed) Icons.Filled.KeyboardArrowRight
+                                else Icons.Filled.KeyboardArrowDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "$group · ${list.size}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                    items(list, key = { it.id }) { conn ->
-                        ConnectionCard(
-                            connection = conn,
-                            onClick = { onOpen(conn) },
-                            onEdit = { onEdit(conn.id) },
-                            onDelete = { pendingDelete = conn }
-                        )
+                    if (!collapsed) {
+                        items(list, key = { it.id }) { conn ->
+                            ConnectionCard(
+                                connection = conn,
+                                onClick = { onOpen(conn) },
+                                onEdit = { onEdit(conn.id) },
+                                onDelete = { pendingDelete = conn },
+                                canMoveUp = connections.indexOfFirst { it.id == conn.id } > 0,
+                                canMoveDown = connections.indexOfFirst { it.id == conn.id } < connections.lastIndex,
+                                onMoveUp = {
+                                    scope.launch {
+                                        val ids = connections.map { it.id }.toMutableList()
+                                        val i = ids.indexOf(conn.id)
+                                        if (i > 0) {
+                                            ids[i] = ids[i - 1].also { ids[i - 1] = ids[i] }
+                                            viewModel.connectionStore.reorder(ids)
+                                        }
+                                    }
+                                },
+                                onMoveDown = {
+                                    scope.launch {
+                                        val ids = connections.map { it.id }.toMutableList()
+                                        val i = ids.indexOf(conn.id)
+                                        if (i in 0 until ids.lastIndex) {
+                                            ids[i] = ids[i + 1].also { ids[i + 1] = ids[i] }
+                                            viewModel.connectionStore.reorder(ids)
+                                        }
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -185,7 +232,11 @@ private fun ConnectionCard(
     connection: Connection,
     onClick: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    canMoveUp: Boolean = false,
+    canMoveDown: Boolean = false,
+    onMoveUp: () -> Unit = {},
+    onMoveDown: () -> Unit = {}
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Card(
@@ -248,6 +299,16 @@ private fun ConnectionCard(
                     DropdownMenuItem(
                         text = { Text("编辑") },
                         onClick = { menuOpen = false; onEdit() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("上移") },
+                        enabled = canMoveUp,
+                        onClick = { menuOpen = false; onMoveUp() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("下移") },
+                        enabled = canMoveDown,
+                        onClick = { menuOpen = false; onMoveDown() }
                     )
                     DropdownMenuItem(
                         text = { Text("删除") },

@@ -76,7 +76,68 @@ fun AppBackground(
                     )
                 }
             }
+            3 -> {
+                val uriText = imageUri
+                if (uriText != null) {
+                    VideoBackground(android.net.Uri.parse(uriText))
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.45f))
+                    )
+                }
+            }
         }
         content()
     }
+}
+
+/**
+ * 用 SurfaceView + MediaPlayer 播放循环静音视频作为背景。
+ * 不引入 ExoPlayer，避免为一个背景多背几 MB 依赖。
+ */
+@Composable
+private fun VideoBackground(uri: android.net.Uri) {
+    val context = LocalContext.current
+    val playerRef = remember(uri) { androidx.compose.runtime.mutableStateOf<android.media.MediaPlayer?>(null) }
+
+    androidx.compose.ui.viewinterop.AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+            android.view.SurfaceView(ctx).apply {
+                holder.addCallback(object : android.view.SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+                        runCatching {
+                            val player = android.media.MediaPlayer().apply {
+                                setDataSource(ctx, uri)
+                                setSurface(holder.surface)
+                                isLooping = true
+                                setVolume(0f, 0f)
+                                setOnPreparedListener { start() }
+                                prepareAsync()
+                            }
+                            playerRef.value = player
+                        }
+                    }
+
+                    override fun surfaceChanged(h: android.view.SurfaceHolder, f: Int, w: Int, ht: Int) = Unit
+
+                    override fun surfaceDestroyed(h: android.view.SurfaceHolder) {
+                        runCatching {
+                            playerRef.value?.stop()
+                            playerRef.value?.release()
+                        }
+                        playerRef.value = null
+                    }
+                })
+            }
+        },
+        onRelease = {
+            runCatching {
+                playerRef.value?.stop()
+                playerRef.value?.release()
+            }
+            playerRef.value = null
+        }
+    )
 }
