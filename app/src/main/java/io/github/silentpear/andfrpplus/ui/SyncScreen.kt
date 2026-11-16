@@ -97,9 +97,15 @@ fun SyncScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 )
                 Spacer(Modifier.height(16.dp))
                 Text("还没有同步任务", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    "建立本地目录与远端目录的镜像关系，先预演再执行",
+                    "同步 = 让手机上的一个文件夹和服务器的文件夹保持一致。\n\n" +
+                        "例如把手机 /sdcard/Download/存档 同步到服务器 /backup：\n" +
+                        "之后每次点「预演」会列出哪些文件要传、哪些要删，确认后再「执行」。\n\n" +
+                        "三种方向：\n" +
+                        "· 本地→远端：只往服务器传\n" +
+                        "· 远端→本地：只往手机拉\n" +
+                        "· 双向：两边都同步，较新的覆盖较旧的",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center

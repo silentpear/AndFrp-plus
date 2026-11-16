@@ -55,6 +55,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -114,6 +115,27 @@ fun BrowserScreen(
     var deleteTarget by remember { mutableStateOf<RemoteEntry?>(null) }
     var propertiesTarget by remember { mutableStateOf<RemoteEntry?>(null) }
     var deleteList by remember { mutableStateOf<List<RemoteEntry>>(emptyList()) }
+    var sortKey by remember { mutableStateOf(SortKey.NAME) }
+    var ascending by remember { mutableStateOf(true) }
+
+    val localContext = androidx.compose.ui.platform.LocalContext.current
+    val uploadPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        val conn = connection ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            val files = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                uris.mapNotNull { copyUriToCache(localContext, it) }
+            }
+            if (files.isEmpty()) {
+                snackbar.showSnackbar("读取文件失败")
+            } else {
+                viewModel.queueUploads(conn, files, path)
+                snackbar.showSnackbar("已加入上传队列：${files.size} 个文件")
+            }
+        }
+    }
 
     var askPassword by remember { mutableStateOf(false) }
     var passwordInput by remember { mutableStateOf("") }
@@ -208,6 +230,10 @@ fun BrowserScreen(
                             }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                 DropdownMenuItem(
+                                    text = { Text("上传文件到当前目录") },
+                                    onClick = { menu = false; uploadPicker.launch(arrayOf("*/*")) }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("新建文件夹") },
                                     onClick = { menu = false; showNewFolder = true }
                                 )
@@ -215,9 +241,26 @@ fun BrowserScreen(
                                     text = { Text("返回上级") },
                                     onClick = { menu = false; path = RemotePaths.parent(path) }
                                 )
+                                HorizontalDivider()
+                                Text(
+                                    text = "排序方式",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+                                )
+                                listOf(
+                                    SortKey.NAME to "按名称",
+                                    SortKey.SIZE to "按大小",
+                                    SortKey.TIME to "按修改时间"
+                                ).forEach { (key, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text((if (sortKey == key) "● " else "   ") + label) },
+                                        onClick = { sortKey = key; menu = false }
+                                    )
+                                }
                                 DropdownMenuItem(
-                                    text = { Text("上传到当前目录") },
-                                    onClick = { menu = false; snackbar.launchAndShow(scope, "请从传输页选择本地文件") }
+                                    text = { Text(if (ascending) "  升序（点此切换）" else "  降序（点此切换）") },
+                                    onClick = { ascending = !ascending; menu = false }
                                 )
                             }
                         }
@@ -325,9 +368,18 @@ fun BrowserScreen(
                     FilledTonalButton(onClick = { reload(path) }) { Text("重试") }
                 }
                 else -> {
-                    val shown = remember(entries, query) {
-                        if (query.isBlank()) entries
+                    val shown = remember(entries, query, sortKey, ascending) {
+                        val filtered = if (query.isBlank()) entries
                         else entries.filter { it.name.contains(query, true) }
+                        val comparator = when (sortKey) {
+                            SortKey.NAME -> compareBy<RemoteEntry> { it.name.lowercase() }
+                            SortKey.SIZE -> compareBy { it.size }
+                            SortKey.TIME -> compareBy { it.modifiedAt }
+                        }
+                        // 目录永远排在文件前面
+                        val byType = compareByDescending<RemoteEntry> { it.isDirectory }
+                        val sorted = filtered.sortedWith(byType.then(if (ascending) comparator else comparator.reversed()))
+                        sorted
                     }
                     LazyColumn(
                         contentPadding = PaddingValues(bottom = 96.dp),
@@ -631,3 +683,26 @@ private fun androidx.compose.material3.SnackbarHostState.launchAndShow(
 ) {
     scope.launch { showSnackbar(message) }
 }
+
+enum class SortKey { NAME, SIZE, TIME }
+
+/** 把系统文件选择器返回的 Uri 复制到应用缓存，供上传使用；返回 null 表示读取失败。 */
+internal fun copyUriToCache(context: android.content.Context, uri: android.net.Uri): File? = runCatching {
+    val name = queryDisplayName(context, uri) ?: "upload_${System.currentTimeMillis()}"
+    val dir = File(context.cacheDir, "uploads").apply { mkdirs() }
+    val target = File(dir, name)
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        target.outputStream().use { output -> input.copyTo(output) }
+    } ?: return@runCatching null
+    target
+}.getOrNull()
+
+private fun queryDisplayName(context: android.content.Context, uri: android.net.Uri): String? = runCatching {
+    context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0) cursor.getString(idx) else null
+            } else null
+        }
+}.getOrNull()

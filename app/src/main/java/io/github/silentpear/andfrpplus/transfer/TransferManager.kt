@@ -270,10 +270,13 @@ class TransferManager(
 
     var connectionProvider: ((String) -> Connection?)? = null
 
-    private fun connect(connection: Connection): RemoteFileSystem {
+    private suspend fun connect(connection: Connection): RemoteFileSystem {
         connections[connection.id]?.let { return it }
         val fs = RemoteFactory.create(context, connection, credentials)
-        return fs.also { connections[connection.id] = it }
+        // 必须真正建立连接，否则各操作会抛「未连接」
+        fs.connect()
+        connections[connection.id] = fs
+        return fs
     }
 
     fun closeConnection(id: String) {
