@@ -43,6 +43,8 @@ class TransferManager(
     private val cancelled = ConcurrentHashMap<String, AtomicBoolean>()
     private val paused = ConcurrentHashMap<String, AtomicBoolean>()
     private val retries = ConcurrentHashMap<String, Int>()
+    // 因网络中断被挂起的任务，回到前台时自动续跑
+    private val interrupted = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val rateTrackers = ConcurrentHashMap<String, RateTracker>()
 
     var conflictPolicy: ConflictPolicy = ConflictPolicy.ASK
@@ -82,6 +84,20 @@ class TransferManager(
         retries.remove(id)
         update(id) { it.copy(status = TransferStatus.QUEUED, error = null, transferredBytes = 0) }
         scope.launch { processQueue() }
+    }
+
+    /** 回到前台时调用：把因网络中断挂起的任务重新排队。 */
+    fun resumeInterrupted() {
+        if (interrupted.isEmpty()) return
+        val ids = interrupted.toSet()
+        interrupted.clear()
+        ids.forEach { id ->
+            retries.remove(id)
+            cancelled.remove(id)
+            paused[id]?.set(false)
+            update(id) { it.copy(status = TransferStatus.QUEUED, error = null) }
+        }
+        processQueue()
     }
 
     fun clearFinished() {
@@ -168,9 +184,11 @@ class TransferManager(
             // 连接可能已经失效（后台被挂起、服务端超时），丢弃缓存客户端以便重试时重建
             dropConnection(item.connectionId)
             val currentRetry = retries.getOrDefault(item.id, 0)
+            val socketLike = listOf("abort", "Socket", "closed", "reset", "timed out", "Broken pipe", "EOF")
+                .any { (e.message ?: "").contains(it, true) }
             if (!wasCancelled && currentRetry < MAX_RETRIES) {
                 retries[item.id] = currentRetry + 1
-                val backoff = 1000L * (1 shl currentRetry)
+                val backoff = (2000L * (1 shl currentRetry)).coerceAtMost(30_000L)
                 update(item.id) {
                     it.copy(
                         status = TransferStatus.QUEUED,
@@ -179,6 +197,17 @@ class TransferManager(
                 }
                 delay(backoff)
                 runItem(item)
+                return
+            }
+            // 多次重试仍失败：不要直接判死，挂起成「可继续」状态，回到前台时自动接着跑
+            if (!wasCancelled && socketLike) {
+                interrupted.add(item.id)
+                update(item.id) {
+                    it.copy(
+                        status = TransferStatus.PAUSED,
+                        error = "网络不稳定，已暂停 · 回到应用会自动重试"
+                    )
+                }
                 return
             }
             val message = e.message ?: e::class.simpleName ?: "未知错误"
@@ -309,7 +338,7 @@ class TransferManager(
     }
 
     private companion object {
-        const val MAX_RETRIES = 3
+        const val MAX_RETRIES = 5
     }
 }
 

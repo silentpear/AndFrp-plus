@@ -353,8 +353,8 @@ fun BrowserScreen(
                             val conn = connection
                             if (conn != null) {
                                 viewModel.queueDownloads(conn, chosen, File(viewModel.settings.lastLocalDir))
-                                val dir = viewModel.safeDownloadDir(File(viewModel.settings.lastLocalDir))
-                                scope.launch { snackbar.showSnackbar("已加入队列 ${chosen.size} 项 → ${dir.absolutePath}") }
+                                val target = viewModel.downloadTargetCombo()
+                                scope.launch { snackbar.showSnackbar("已加入队列 ${chosen.size} 项 → $target") }
                             }
                             selection = emptySet()
                         }) { Icon(Icons.Filled.Download, "下载") }

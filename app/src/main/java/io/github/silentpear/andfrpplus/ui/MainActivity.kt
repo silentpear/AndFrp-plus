@@ -91,5 +91,7 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshLockState()
+        // 回到前台时继续被网络中断挂起的传输
+        viewModel.transfers.resumeInterrupted()
     }
 }

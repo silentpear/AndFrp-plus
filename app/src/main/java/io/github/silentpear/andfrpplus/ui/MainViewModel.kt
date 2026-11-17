@@ -125,18 +125,28 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
         val tree = settings.downloadTreeUri ?: return@withContext
         val source = File(item.localPath)
         if (!source.exists()) return@withContext
-        runCatching {
+        val result = runCatching {
             val root = androidx.documentfile.provider.DocumentFile
-                .fromTreeUri(app, android.net.Uri.parse(tree)) ?: return@runCatching
+                .fromTreeUri(app, android.net.Uri.parse(tree))
+                ?: error("无法访问所选文件夹，请重新选择下载目录")
             val name = source.name
-            val target = root.findFile(name)
-                ?: root.createFile("application/octet-stream", name)
-                ?: return@runCatching
+            // 同名文件先删掉，否则 createFile 会自动加 (1)
+            root.findFile(name)?.delete()
+            val target = root.createFile(mimeOf(name), name)
+                ?: error("无法在所选的文件夹中创建文件")
             app.contentResolver.openOutputStream(target.uri, "wt")?.use { out ->
                 source.inputStream().use { it.copyTo(out) }
-            }
-        }.onSuccess {
+            } ?: error("无法写入所选文件夹")
+        }
+        result.onSuccess {
             source.delete()
+        }.onFailure { e ->
+            // 保留暂存文件，并明确告诉用户文件在哪里
+            NotificationHelper.showExported(
+                app,
+                "无法保存到所选文件夹：${e.message ?: "未知错误"}",
+                "文件已保留在 ${source.absolutePath}"
+            )
         }
     }
 
@@ -265,6 +275,13 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
     /** SAF 导出用的暂存目录。 */
     fun stagingDir(): File =
         File(app.getExternalFilesDir(null) ?: app.filesDir, "staging").apply { mkdirs() }
+
+    /** 下载目标的可读描述：选了文件夹就说文件夹名，否则给真实路径。 */
+    fun downloadTargetCombo(): String {
+        val tree = settings.downloadTreeUri
+        return if (!tree.isNullOrEmpty()) downloadTargetLabel()
+        else safeDownloadDir(File(settings.lastLocalDir)).absolutePath
+    }
 
     fun safeDownloadDir(preferred: File?): File {
         if (!settings.downloadTreeUri.isNullOrEmpty()) return stagingDir()
@@ -454,6 +471,22 @@ object NotificationHelper {
                 android.app.NotificationManager.IMPORTANCE_DEFAULT
             )
             manager?.createNotificationChannel(channel)
+        }
+    }
+
+    fun showExported(context: android.content.Context, title: String, text: String) {
+        ensureChannel(context)
+        val notification = androidx.core.app.NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setContentTitle(title)
+            .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .build()
+        runCatching {
+            androidx.core.app.NotificationManagerCompat.from(context).notify(
+                (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
+                notification
+            )
         }
     }
 
