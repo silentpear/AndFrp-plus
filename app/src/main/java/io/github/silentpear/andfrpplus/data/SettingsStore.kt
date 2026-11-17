@@ -49,6 +49,10 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_BG_IMAGE, null)
         set(value) = prefs.edit().putString(KEY_BG_IMAGE, value).apply()
 
+    var bgVideoUri: String?
+        get() = prefs.getString(KEY_BG_VIDEO, null)
+        set(value) = prefs.edit().putString(KEY_BG_VIDEO, value).apply()
+
     var darkMode: Int
         get() = prefs.getInt(KEY_DARK_MODE, 0)
         set(value) = prefs.edit().putInt(KEY_DARK_MODE, value).apply()
@@ -86,6 +90,7 @@ class SettingsStore(context: Context) {
         const val KEY_BG_MODE = "bg_mode"
         const val KEY_BG_COLOR = "bg_color"
         const val KEY_BG_IMAGE = "bg_image_uri"
+        const val KEY_BG_VIDEO = "bg_video_uri"
         const val KEY_APP_LOCK = "app_lock"
         const val KEY_CONFLICT = "conflict_policy"
         const val KEY_SPEED_LIMIT = "speed_limit"

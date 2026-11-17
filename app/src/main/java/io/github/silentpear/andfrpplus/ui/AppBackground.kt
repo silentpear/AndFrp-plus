@@ -27,6 +27,7 @@ fun AppBackground(
     mode: Int,
     color: Int,
     imageUri: String?,
+    videoUri: String?,
     content: @Composable () -> Unit
 ) {
     if (mode == 0) {
@@ -84,7 +85,7 @@ fun AppBackground(
                 }
             }
             3 -> {
-                val uriText = imageUri
+                val uriText = videoUri
                 if (uriText != null) {
                     VideoBackground(android.net.Uri.parse(uriText))
                     Box(

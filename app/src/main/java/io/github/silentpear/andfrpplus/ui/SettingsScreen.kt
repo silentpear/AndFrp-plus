@@ -137,8 +137,7 @@ fun SettingsScreen(
                             android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
                         )
                     }
-                    viewModel.setBackgroundImage(uri.toString())
-                    viewModel.setBackgroundMode(3)
+                    viewModel.setBackgroundVideo(uri.toString())
                     bgMode = 3
                 }
             }
@@ -176,7 +175,11 @@ fun SettingsScreen(
                             when {
                                 m == 2 && viewModel.settings.bgImageUri.isNullOrEmpty() ->
                                     bgImagePicker.launch(arrayOf("image/*"))
-                                m == 3 && viewModel.settings.bgImageUri.isNullOrEmpty() ->
+                                m == 2 -> {
+                                    viewModel.setBackgroundMode(2)
+                                    bgMode = 2
+                                }
+                                m == 3 && viewModel.settings.bgVideoUri.isNullOrEmpty() ->
                                     bgVideoPicker.launch(arrayOf("video/*"))
                                 m == 3 -> {
                                     viewModel.setBackgroundMode(3)
@@ -223,6 +226,14 @@ fun SettingsScreen(
                     supportingContent = { Text("从相册挑一张作为背景") },
                     leadingContent = { Icon(Icons.Filled.Palette, null) },
                     modifier = Modifier.clickable { bgImagePicker.launch(arrayOf("image/*")) }
+                )
+            }
+            if (bgMode == 3) {
+                ListItem(
+                    headlineContent = { Text("选择视频") },
+                    supportingContent = { Text("循环静音播放，建议 10 秒内的小视频") },
+                    leadingContent = { Icon(Icons.Filled.Palette, null) },
+                    modifier = Modifier.clickable { bgVideoPicker.launch(arrayOf("video/*")) }
                 )
             }
             ListItem(

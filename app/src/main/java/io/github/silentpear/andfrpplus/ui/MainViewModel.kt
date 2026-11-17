@@ -41,6 +41,15 @@ class MainViewModel(private val app: AndFrpApp) : ViewModel() {
     val bgMode: StateFlow<Int> = _bgMode.asStateFlow()
     private val _bgColor = MutableStateFlow(app.settings.bgColor)
     val bgColor: StateFlow<Int> = _bgColor.asStateFlow()
+    private val _bgVideo = MutableStateFlow(app.settings.bgVideoUri)
+    val bgVideo: StateFlow<String?> = _bgVideo.asStateFlow()
+
+    fun setBackgroundVideo(uri: String?) {
+        settings.bgVideoUri = uri
+        _bgVideo.value = uri
+        setBackgroundMode(if (uri != null) 3 else 0)
+    }
+
     private val _bgImage = MutableStateFlow(app.settings.bgImageUri)
     val bgImage: StateFlow<String?> = _bgImage.asStateFlow()
 

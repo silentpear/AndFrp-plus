@@ -54,7 +54,13 @@ class MainActivity : FragmentActivity() {
                 val bgMode by viewModel.bgMode.collectAsStateWithLifecycle()
                 val bgColor by viewModel.bgColor.collectAsStateWithLifecycle()
                 val bgImage by viewModel.bgImage.collectAsStateWithLifecycle()
-                AppBackground(mode = bgMode, color = bgColor, imageUri = bgImage) {
+                val bgVideo by viewModel.bgVideo.collectAsStateWithLifecycle()
+                AppBackground(
+                    mode = bgMode,
+                    color = bgColor,
+                    imageUri = bgImage,
+                    videoUri = bgVideo
+                ) {
                     AppRoot(viewModel = viewModel, incomingUri = incomingUri)
                 }
             }
