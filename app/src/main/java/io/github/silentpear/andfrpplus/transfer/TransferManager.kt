@@ -165,11 +165,18 @@ class TransferManager(
             }
         } catch (e: Exception) {
             val wasCancelled = cancelled[item.id]?.get() == true
+            // 连接可能已经失效（后台被挂起、服务端超时），丢弃缓存客户端以便重试时重建
+            dropConnection(item.connectionId)
             val currentRetry = retries.getOrDefault(item.id, 0)
             if (!wasCancelled && currentRetry < MAX_RETRIES) {
                 retries[item.id] = currentRetry + 1
                 val backoff = 1000L * (1 shl currentRetry)
-                update(item.id) { it.copy(status = TransferStatus.QUEUED, error = "重试中 (${currentRetry + 1}/$MAX_RETRIES)") }
+                update(item.id) {
+                    it.copy(
+                        status = TransferStatus.QUEUED,
+                        error = "连接中断，${backoff / 1000} 秒后重连（${currentRetry + 1}/$MAX_RETRIES）"
+                    )
+                }
                 delay(backoff)
                 runItem(item)
                 return
@@ -277,6 +284,11 @@ class TransferManager(
         fs.connect()
         connections[connection.id] = fs
         return fs
+    }
+
+    /** 丢弃某个连接的缓存客户端，下次使用时重新建立连接。 */
+    fun dropConnection(id: String) {
+        connections.remove(id)?.let { runCatching { it.close() } }
     }
 
     fun closeConnection(id: String) {

@@ -7,6 +7,8 @@ package io.github.silentpear.andfrpplus.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,6 +80,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import io.github.silentpear.andfrpplus.data.Connection
 import io.github.silentpear.andfrpplus.data.RemoteEntry
@@ -994,14 +998,46 @@ private fun RemoteImage(
         if (bitmap == null) failure = true
     }
 
-    Box(modifier, contentAlignment = Alignment.Center) {
+    var scale by remember(entry.path) { mutableStateOf(1f) }
+    var offset by remember(entry.path) { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+
+    Box(
+        modifier
+            .pointerInput(entry.path) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    val next = (scale * zoom).coerceIn(1f, 6f)
+                    scale = next
+                    offset = if (next > 1f) offset + pan else androidx.compose.ui.geometry.Offset.Zero
+                }
+            }
+            .pointerInput(entry.path) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        if (scale > 1f) {
+                            scale = 1f
+                            offset = androidx.compose.ui.geometry.Offset.Zero
+                        } else {
+                            scale = 2.5f
+                        }
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
         when {
             failure -> Text("无法加载图片", color = MaterialTheme.colorScheme.error)
             bitmap == null -> CircularProgressIndicator()
             else -> androidx.compose.foundation.Image(
                 bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = entry.name,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y
+                    ),
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit
             )
         }
